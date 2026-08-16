@@ -1,0 +1,12 @@
+[
+  {"file_path": "src/models/wardrobe.py", "additions": 60, "deletions": 0, "change_type": "added", "occurred_at": "2026-02-01T10:00:00Z", "change_unit": "aa11"},
+  {"file_path": "src/api/routes/wardrobes.py", "additions": 45, "deletions": 0, "change_type": "added", "occurred_at": "2026-02-02T10:00:00Z", "change_unit": "aa11"},
+  {"file_path": "src/models/wardrobe.py", "additions": 30, "deletions": 5, "change_type": "modified", "occurred_at": "2026-04-10T09:00:00Z", "change_unit": "bb22"},
+  {"file_path": "migrations/001_initial.py", "additions": 120, "deletions": 0, "change_type": "added", "occurred_at": "2026-06-15T09:00:00Z", "change_unit": "bb22"},
+  {"file_path": "migrations/002_outfits.py", "additions": 80, "deletions": 0, "change_type": "added", "occurred_at": "2026-06-15T09:00:00Z", "change_unit": "bb22"},
+  {"file_path": "src/db/adapter.py", "additions": 200, "deletions": 120, "change_type": "modified", "occurred_at": "2026-06-18T11:42:00Z", "change_unit": "pr42"},
+  {"file_path": "requirements.txt", "additions": 3, "deletions": 2, "change_type": "modified", "occurred_at": "2026-06-18T11:42:00Z", "change_unit": "pr42"},
+  {"file_path": "tests/integration/test_adapter.py", "additions": 95, "deletions": 0, "change_type": "added", "occurred_at": "2026-06-16T10:00:00Z", "change_unit": "cc33"},
+  {"file_path": "src/auth/oauth2.py", "additions": 75, "deletions": 0, "change_type": "added", "occurred_at": "2026-04-12T10:00:00Z", "change_unit": "pr31"},
+  {"file_path": "docs/adr/ADR-002-postgres.md", "additions": 40, "deletions": 0, "change_type": "added", "occurred_at": "2026-06-20T10:00:00Z", "change_unit": "pr42"}
+]

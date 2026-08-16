@@ -1,0 +1,13 @@
+[project]
+name = "evolution-app"
+version = "0.2.0"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+]

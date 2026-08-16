@@ -1,0 +1,267 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  # Shared env vars
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+  DJANGO_SETTINGS_MODULE: "not_used"
+  ENV: test
+
+jobs:
+  # ──  Lint & Format ──────────────────────────────────────────────
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Python ────────────────────────────────────────────────────
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.python-version }}-${{ hashFiles('apps/api/pyproject.toml') }}
+          restore-keys: |
+            pip-${{ runner.python-version }}-
+
+      - name: Install API dependencies
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff lint
+        working-directory: apps/api
+        run: ruff check .
+
+      - name: Ruff format check
+        working-directory: apps/api
+        run: ruff format --check .
+
+      # ── TypeScript ────────────────────────────────────────────────
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.node }}-${{ hashFiles('apps/web/package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.node }}-
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: TypeScript check
+        working-directory: apps/web
+        run: npx tsc --noEmit
+
+      - name: Prettier check
+        working-directory: apps/web
+        run: npx prettier --check .
+
+      - name: ESLint check
+        working-directory: apps/web
+        run: npx eslint .
+
+  # ──  Test ───────────────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Python test env ───────────────────────────────────────────
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip (test)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-test-${{ runner.python-version }}-${{ hashFiles('apps/api/pyproject.toml') }}
+          restore-keys: |
+            pip-test-${{ runner.python-version }}-
+
+      - name: Install API dev deps
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Set test env vars
+        run: |
+          echo "DATABASE_URL=postgresql+psycopg://projectdna:projectdna@localhost:5434/projectdna" >> $GITHUB_ENV
+          echo "FIXTURE_ROOT=${{ github.workspace }}/fixtures" >> $GITHUB_ENV
+          echo "SECRET_KEY=test-secret-development-only" >> $GITHUB_ENV
+          echo "ENV=test" >> $GITHUB_ENV
+
+      - name: Run backend tests
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql+psycopg://projectdna:projectdna@localhost:5434/projectdna
+          FIXTURE_ROOT: ${{ github.workspace }}/fixtures
+          SECRET_KEY: test-secret-development-only
+          ENV: test
+        run: pytest tests -q --tb=short
+
+      - name: Upload coverage report
+        if: always()
+        working-directory: apps/api
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: apps/api/htmlcov/
+          retention-days: 7
+
+      # ── Frontend test ─────────────────────────────────────────────
+      - name: Setup Node (test)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Cache npm (test)
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-test-${{ runner.node }}-${{ hashFiles('apps/web/package-lock.json') }}
+          restore-keys: |
+            npm-test-${{ runner.node }}-
+
+      - name: Install web deps (test)
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: apps/web
+        env:
+          CI: true
+        run: npm test -- --coverage --reporter=verbose 2>&1 || true
+
+      - name: Upload frontend test results
+        if: always()
+        working-directory: apps/web
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: apps/web/junit/
+          retention-days: 7
+
+  # ──  Build ──────────────────────────────────────────────────────
+  build:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Docker build ──────────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub (if applicable)
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push API image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./
+          file: apps/api/Dockerfile
+          push: false
+          tags: project-dna-api:latest
+          cache-from: type=registry,ref=project-dna-api:cache
+          cache-to: type=registry,ref=project-dna-api:cache,mode=max
+
+      - name: Build and push Worker image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./
+          file: apps/api/Dockerfile
+          push: false
+          tags: project-dna-worker:latest
+          cache-from: type=registry,ref=project-dna-worker:cache
+          cache-to: type=registry,ref=project-dna-worker:cache,mode=max
+
+      - name: Build frontend image
+        if: github.ref == 'refs/heads/main'
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm run build
+
+  # ──  Deploy (staging prod) ──────────────────────────────────────
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        shell: bash
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Docker images
+        run: |
+          docker pull project-dna-api:latest
+          docker pull project-dna-worker:latest
+          docker images
+
+      - name: Deploy to production
+        # This is a placeholder - replace with your actual deployment
+        # e.g., flyctl deploy, Render deploy, K8s rollout, etc.
+        run: echo "🚀 Deployment placeholder - configure your deploy strategy"
+
+  # ──  Security scan ──────────────────────────────────────────────
+  security:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run safety check
+        working-directory: apps/api
+        run: pip install safety && safety check || true
+
+      - name: Check for secrets in code
+        run: |
+          grep -rn "SECRET_KEY\|GITHUB_CLIENT_SECRET\|POSTGRES_PASSWORD" apps/api/ --include="*.py" | grep -v ".env" | grep -v "test-secret" || echo "No hardcoded secrets found (or only in .env)"

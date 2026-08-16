@@ -1,0 +1,15 @@
+[
+  {"file_path": "src/server.js", "additions": 50, "deletions": 0, "change_type": "added", "occurred_at": "2026-02-10T10:00:00Z", "change_unit": "init"},
+  {"file_path": "package.json", "additions": 20, "deletions": 0, "change_type": "added", "occurred_at": "2026-02-10T10:00:00Z", "change_unit": "init"},
+  {"file_path": "src/recs/engine.ts", "additions": 200, "deletions": 0, "change_type": "added", "occurred_at": "2026-04-15T10:00:00Z", "change_unit": "f1"},
+  {"file_path": "src/recs/engine_test.ts", "additions": 60, "deletions": 0, "change_type": "added", "occurred_at": "2026-04-15T10:00:00Z", "change_unit": "f1"},
+  {"file_path": "src/recs/engine.ts", "additions": 0, "deletions": 200, "change_type": "deleted", "occurred_at": "2026-04-25T10:00:00Z", "change_unit": "f2"},
+  {"file_path": "src/recs/engine_test.ts", "additions": 0, "deletions": 60, "change_type": "deleted", "occurred_at": "2026-04-25T10:00:00Z", "change_unit": "f2"},
+  {"file_path": "src/server.js", "additions": 0, "deletions": 50, "change_type": "deleted", "occurred_at": "2026-05-08T09:00:00Z", "change_unit": "m1"},
+  {"file_path": "src/server.py", "additions": 45, "deletions": 0, "change_type": "added", "occurred_at": "2026-05-08T09:00:00Z", "change_unit": "m1"},
+  {"file_path": "pyproject.toml", "additions": 25, "deletions": 0, "change_type": "added", "occurred_at": "2026-05-08T09:00:00Z", "change_unit": "m1"},
+  {"file_path": "package.json", "additions": 0, "deletions": 20, "change_type": "deleted", "occurred_at": "2026-05-08T09:00:00Z", "change_unit": "m1"},
+  {"file_path": "src/api/router.py", "additions": 180, "deletions": 10, "change_type": "modified", "occurred_at": "2026-05-25T10:00:00Z", "change_unit": "h1"},
+  {"file_path": "src/api/router.py", "additions": 120, "deletions": 60, "change_type": "modified", "occurred_at": "2026-06-01T10:00:00Z", "change_unit": "h2"},
+  {"file_path": "src/api/router.py", "additions": 200, "deletions": 150, "change_type": "modified", "occurred_at": "2026-06-10T10:00:00Z", "change_unit": "h3"}
+]

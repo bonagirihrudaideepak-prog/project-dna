@@ -1,0 +1,126 @@
+[
+  {
+    "type": "release",
+    "provider_id": "github:release:2001",
+    "title": "v0.1.0",
+    "occurred_at": "2026-03-01T09:00:00Z",
+    "source_url": "https://github.com/student/evolution-app/releases/tag/v0.1.0",
+    "metadata": {"tag": "v0.1.0", "body": "Initial prototype with Express."}
+  },
+  {
+    "type": "release",
+    "provider_id": "github:release:2002",
+    "title": "v0.2.0",
+    "occurred_at": "2026-05-15T09:00:00Z",
+    "source_url": "https://github.com/student/evolution-app/releases/tag/v0.2.0",
+    "metadata": {"tag": "v0.2.0", "body": "Failed feature removed; migrated to FastAPI."}
+  },
+  {
+    "type": "pr",
+    "provider_id": "github:pr:12",
+    "title": "Migrate Express to FastAPI",
+    "occurred_at": "2026-05-10T12:00:00Z",
+    "source_url": "https://github.com/student/evolution-app/pull/12",
+    "metadata": {
+      "number": 12,
+      "state": "closed",
+      "merged_at": "2026-05-10T12:00:00Z",
+      "labels": ["framework"],
+      "author_login": "student",
+      "body": "Framework replacement for better async support."
+    }
+  },
+  {
+    "type": "pr",
+    "provider_id": "github:pr:9",
+    "title": "Add recommendations feature",
+    "occurred_at": "2026-04-20T09:00:00Z",
+    "source_url": "https://github.com/student/evolution-app/pull/9",
+    "metadata": {
+      "number": 9,
+      "state": "closed",
+      "merged_at": "2026-04-20T09:00:00Z",
+      "labels": ["feature"],
+      "author_login": "student",
+      "body": "Added recommendations feature experiment."
+    }
+  },
+  {
+    "type": "commit",
+    "provider_id": "github:commit:f1",
+    "title": "feat: add recommendations engine",
+    "occurred_at": "2026-04-15T10:00:00Z",
+    "source_url": "https://github.com/student/evolution-app/commit/f1",
+    "metadata": {
+      "sha": "f1",
+      "author_login": "student",
+      "message": "feat: add recommendations engine",
+      "paths": ["src/recs/engine.ts", "src/recs/engine_test.ts"]
+    }
+  },
+  {
+    "type": "commit",
+    "provider_id": "github:commit:f2",
+    "title": "revert: remove recommendations engine",
+    "occurred_at": "2026-04-25T10:00:00Z",
+    "source_url": "https://github.com/student/evolution-app/commit/f2",
+    "metadata": {
+      "sha": "f2",
+      "author_login": "student",
+      "message": "revert: remove recommendations engine (refs #9)",
+      "paths": ["src/recs/engine.ts", "src/recs/engine_test.ts"]
+    }
+  },
+  {
+    "type": "commit",
+    "provider_id": "github:commit:m1",
+    "title": "refactor: migrate express to fastapi",
+    "occurred_at": "2026-05-08T09:00:00Z",
+    "source_url": "https://github.com/student/evolution-app/commit/m1",
+    "metadata": {
+      "sha": "m1",
+      "author_login": "student",
+      "message": "refactor: migrate express to fastapi (refs #12)",
+      "paths": ["src/server.js", "src/server.py", "package.json", "pyproject.toml"]
+    }
+  },
+  {
+    "type": "commit",
+    "provider_id": "github:commit:h1",
+    "title": "chore: rework api routing",
+    "occurred_at": "2026-05-25T10:00:00Z",
+    "source_url": "https://github.com/student/evolution-app/commit/h1",
+    "metadata": {
+      "sha": "h1",
+      "author_login": "student",
+      "message": "chore: rework api routing",
+      "paths": ["src/api/router.py"]
+    }
+  },
+  {
+    "type": "commit",
+    "provider_id": "github:commit:h2",
+    "title": "fix: hotspots in router.py",
+    "occurred_at": "2026-06-01T10:00:00Z",
+    "source_url": "https://github.com/student/evolution-app/commit/h2",
+    "metadata": {
+      "sha": "h2",
+      "author_login": "student",
+      "message": "fix: hotspots in router.py",
+      "paths": ["src/api/router.py"]
+    }
+  },
+  {
+    "type": "commit",
+    "provider_id": "github:commit:h3",
+    "title": "chore: more churn in router.py",
+    "occurred_at": "2026-06-10T10:00:00Z",
+    "source_url": "https://github.com/student/evolution-app/commit/h3",
+    "metadata": {
+      "sha": "h3",
+      "author_login": "student",
+      "message": "chore: more churn in router.py",
+      "paths": ["src/api/router.py"]
+    }
+  }
+]

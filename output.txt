@@ -1,0 +1,23 @@
+unknown command "set-branch-protection" for "gh repo"
+
+Usage:  gh repo <command> [flags]
+
+Available commands:
+  archive
+  autolink
+  clone
+  create
+  delete
+  deploy-key
+  edit
+  fork
+  gitignore
+  license
+  list
+  read-dir
+  read-file
+  rename
+  set-default
+  sync
+  unarchive
+  view

@@ -1,0 +1,9 @@
+{
+  "full_name": "team/wardrobe-api",
+  "owner": "team",
+  "name": "wardrobe-api",
+  "description": "A mature fixture: tests, CI, docs, migrations, releases, and ADRs.",
+  "visibility": "public",
+  "default_branch": "main",
+  "commit_sha": "9c2e4f6a8b0d1c3e5f7a9b0c1d3e5f7a9b0c1d3e"
+}

@@ -1,0 +1,116 @@
+[
+  {
+    "type": "release",
+    "provider_id": "github:release:1001",
+    "title": "v1.0.0",
+    "occurred_at": "2026-05-20T09:00:00Z",
+    "source_url": "https://github.com/team/wardrobe-api/releases/tag/v1.0.0",
+    "metadata": {"tag": "v1.0.0", "body": "First stable release."}
+  },
+  {
+    "type": "release",
+    "provider_id": "github:release:1002",
+    "title": "v1.1.0",
+    "occurred_at": "2026-07-01T09:00:00Z",
+    "source_url": "https://github.com/team/wardrobe-api/releases/tag/v1.1.0",
+    "metadata": {"tag": "v1.1.0", "body": "MongoDB to PostgreSQL migration."}
+  },
+  {
+    "type": "pr",
+    "provider_id": "github:pr:42",
+    "title": "Replace MongoDB repository with PostgreSQL adapter",
+    "occurred_at": "2026-06-18T11:42:00Z",
+    "source_url": "https://github.com/team/wardrobe-api/pull/42",
+    "metadata": {
+      "number": 42,
+      "state": "closed",
+      "merged_at": "2026-06-18T11:42:00Z",
+      "labels": ["database", "architecture"],
+      "author_login": "team-lead",
+      "body": "The project introduced relationships among users, wardrobes, outfits, and feedback. Migrating to PostgreSQL to enable relational querying."
+    }
+  },
+  {
+    "type": "pr",
+    "provider_id": "github:pr:55",
+    "title": "Add outcome review for database migration",
+    "occurred_at": "2026-07-05T14:00:00Z",
+    "source_url": "https://github.com/team/wardrobe-api/pull/55",
+    "metadata": {
+      "number": 55,
+      "state": "closed",
+      "merged_at": "2026-07-05T14:00:00Z",
+      "labels": ["maintenance"],
+      "author_login": "team-lead",
+      "body": "Query code became shorter in the measured feature path."
+    }
+  },
+  {
+    "type": "pr",
+    "provider_id": "github:pr:31",
+    "title": "Add authentication via OAuth2",
+    "occurred_at": "2026-04-12T10:00:00Z",
+    "source_url": "https://github.com/team/wardrobe-api/pull/31",
+    "metadata": {
+      "number": 31,
+      "state": "closed",
+      "merged_at": "2026-04-12T10:00:00Z",
+      "labels": ["security"],
+      "author_login": "dev-2",
+      "body": "Add OAuth2 login for API clients."
+    }
+  },
+  {
+    "type": "issue",
+    "provider_id": "github:issue:31",
+    "title": "Relational queries are painful with MongoDB",
+    "occurred_at": "2026-06-01T08:00:00Z",
+    "source_url": "https://github.com/team/wardrobe-api/issues/31",
+    "metadata": {
+      "number": 31,
+      "state": "closed",
+      "labels": ["database"],
+      "author_login": "team-lead",
+      "body": "Relationships among users, wardrobes, outfits, and feedback are hard to model."
+    }
+  },
+  {
+    "type": "commit",
+    "provider_id": "github:commit:aa11",
+    "title": "feat: add wardrobe models",
+    "occurred_at": "2026-02-01T10:00:00Z",
+    "source_url": "https://github.com/team/wardrobe-api/commit/aa11",
+    "metadata": {
+      "sha": "aa11",
+      "author_login": "dev-1",
+      "message": "feat: add wardrobe models",
+      "paths": ["src/models/wardrobe.py"]
+    }
+  },
+  {
+    "type": "commit",
+    "provider_id": "github:commit:bb22",
+    "title": "feat: add migrations for postgres",
+    "occurred_at": "2026-06-15T09:00:00Z",
+    "source_url": "https://github.com/team/wardrobe-api/commit/bb22",
+    "metadata": {
+      "sha": "bb22",
+      "author_login": "team-lead",
+      "message": "feat: add migrations for postgres (refs #31, #42)",
+      "paths": ["migrations/001_initial.py", "migrations/002_outfits.py"]
+    }
+  },
+  {
+    "type": "commit",
+    "provider_id": "github:commit:cc33",
+    "title": "test: add integration tests for postgres adapter",
+    "occurred_at": "2026-06-16T10:00:00Z",
+    "source_url": "https://github.com/team/wardrobe-api/commit/cc33",
+    "metadata": {
+      "sha": "cc33",
+      "author_login": "dev-2",
+      "message": "test: add integration tests for postgres adapter",
+      "paths": ["tests/integration/test_adapter.py"]
+    }
+  }
+]
