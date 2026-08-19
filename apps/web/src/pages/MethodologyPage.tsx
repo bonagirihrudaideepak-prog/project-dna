@@ -1,69 +1,154 @@
-export function MethodologyPage() {
+import { useState } from "react";
+import { Card, Button } from "../lib/components";
+
+export const MethodologyPage = () => {
   const dimensions = [
-    { key: "technical_complexity", name: "Technical Complexity", direction: "Descriptive", desc: "Number and interaction of technical elements." },
-    { key: "maintainability", name: "Maintainability", direction: "Higher is better", desc: "Hotspot dispersion, file-size health, coupling, test maturity, docs." },
-    { key: "testing_maturity", name: "Testing Maturity", direction: "Higher is better", desc: "Test-file ratio, CI test signal, breadth, recency. Not a coverage claim." },
-    { key: "documentation_quality", name: "Documentation Quality", direction: "Higher is better", desc: "README completeness, setup, ADRs, API docs, governance." },
-    { key: "evolution_health", name: "Evolution Health", direction: "Higher is better", desc: "Traceable changes, releases, controlled change size, rationale, follow-up." },
-    { key: "delivery_readiness", name: "Delivery Readiness", direction: "Higher is better", desc: "Automated checks, env separation, lockfiles, deployment, release/rollback." },
-    { key: "scalability_readiness", name: "Scalability Readiness", direction: "Higher is better", desc: "Separation of concerns, data discipline, statelessness, async, observability." },
-    { key: "technical_debt_risk", name: "Technical Debt Risk", direction: "Lower is better", desc: "Hotspot concentration, rework, test gaps, markers, doc gaps, config risk." },
+    {
+      key: "technical_complexity",
+      name: "Technical Complexity",
+      direction: "descriptive",
+      description:
+        "The number and interaction of technical elements. Descriptive, not a quality judgement.",
+      indicators: [
+        { key: "structural_breadth", weight: 0.2 },
+        { key: "dependency_breadth", weight: 0.2 },
+        { key: "integration_breadth", weight: 0.2 },
+        { key: "change_coupling", weight: 0.2 },
+        { key: "lang_config_heterogeneity", weight: 0.2 },
+      ],
+    },
+    {
+      key: "maintainability",
+      name: "Maintainability",
+      direction: "higher_is_better",
+      description:
+        "Ease of understanding and changing the codebase safely.",
+      indicators: [
+        { key: "hotspot_dispersion", weight: 0.25 },
+        { key: "file_size_health", weight: 0.15 },
+        { key: "change_coupling_inverse", weight: 0.2 },
+        { key: "test_maturity", weight: 0.2 },
+        { key: "documentation_quality", weight: 0.2 },
+      ],
+    },
+    {
+      key: "testing_maturity",
+      name: "Testing Maturity",
+      direction: "higher_is_better",
+      description:
+        "Presence of tests, CI test execution, and test breadth. Not a claim about actual coverage.",
+      indicators: [
+        { key: "test_file_ratio", weight: 0.25 },
+        { key: "ci_test_execution", weight: 0.25 },
+        { key: "test_breadth", weight: 0.2 },
+        { key: "test_recency", weight: 0.15 },
+        { key: "trusted_coverage_artifact", weight: 0.15 },
+      ],
+    },
+    {
+      key: "documentation_quality",
+      name: "Documentation Quality",
+      direction: "higher_is_better",
+      description:
+        "Quality of README, setup, architecture, API, and governance documentation.",
+      indicators: [
+        { key: "readme_completeness", weight: 0.3 },
+        { key: "setup_reproducibility", weight: 0.2 },
+        { key: "architecture_decision_docs", weight: 0.2 },
+        { key: "api_user_docs", weight: 0.15 },
+        { key: "governance_docs", weight: 0.15 },
+      ],
+    },
+    {
+      key: "evolution_health",
+      name: "Evolution Health",
+      direction: "higher_is_better",
+      description:
+        "Quality of project history: traceable change units, releases, controlled change size, rationale, and follow-up.",
+      indicators: [
+        { key: "traceable_change_units", weight: 0.25 },
+        { key: "release_version_evidence", weight: 0.2 },
+        { key: "controlled_change_size", weight: 0.2 },
+        { key: "rationale_preservation", weight: 0.2 },
+        { key: "outcome_followup", weight: 0.15 },
+      ],
+    },
+    {
+      key: "delivery_readiness",
+      name: "Delivery Readiness",
+      direction: "higher_is_better",
+      description:
+        "Signals for automated checks, environment separation, reproducible dependencies, deployment, and release/rollback.",
+      indicators: [
+        { key: "automated_checks", weight: 0.25 },
+        { key: "env_config_separation", weight: 0.2 },
+        { key: "reproducible_dependency_state", weight: 0.2 },
+        { key: "deployment_definition", weight: 0.2 },
+        { key: "release_rollback_evidence", weight: 0.15 },
+      ],
+    },
+    {
+      key: "scalability_readiness",
+      name: "Scalability Readiness",
+      direction: "higher_is_better",
+      description:
+        "Readiness signals for separation of concerns, data discipline, statelessness, async mechanisms, and observability.",
+      indicators: [
+        { key: "separation_of_concerns", weight: 0.25 },
+        { key: "persistent_data_discipline", weight: 0.2 },
+        { key: "stateless_configurable_services", weight: 0.2 },
+        { key: "async_cache_batch", weight: 0.15 },
+        { key: "observability_load_evidence", weight: 0.2 },
+      ],
+    },
+    {
+      key: "technical_debt_risk",
+      name: "Technical Debt Risk",
+      direction: "lower_is_better",
+      description:
+        "Risk signals from hotspots, rework, test gaps, debt markers, doc gaps, and dependency/config risk.",
+      indicators: [
+        { key: "hotspot_concentration", weight: 0.25 },
+        { key: "rework_revert_signal", weight: 0.2 },
+        { key: "test_gap", weight: 0.2 },
+        { key: "todo_fixme_density", weight: 0.1 },
+        { key: "documentation_gap", weight: 0.1 },
+        { key: "dependency_config_risk", weight: 0.15 },
+      ],
+    },
   ];
 
   return (
-    <div>
-      <h1 className="mb">Scoring Methodology</h1>
-      <p className="muted mb">
-        Model <code>dna-core-1.0</code>. Scores are generated by code, not by an LLM. Raw indicators are
-        retained for reproducibility.
-      </p>
+    <div className="min-h-screen bg-pageBg p-4 md:p-8">
+      <h1 className="text-2xl font-bold text-slate-700 mb-6">
+        Methodology
+      </h1>
 
-      <h2 className="mb">General formula</h2>
-      <pre className="code">{`score(d) = round(100 × Σ(wᵢ × qᵢ × xᵢ) / Σ(wᵢ × qᵢ))
-coverage(d) = Σ(wᵢ × qᵢ) / Σ(wᵢ)`}</pre>
-      <p className="muted small">
-        xᵢ = normalized indicator in [0,1], wᵢ = weight, qᵢ = evidence-quality factor. The denominator
-        only includes available evidence. Coverage is displayed separately so a high score from thin
-        evidence is not mistaken for a strong conclusion.
-      </p>
-
-      <h2 className="mt-lg mb">Confidence labels</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Coverage</th>
-            <th>Label</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>&lt; 0.35</td><td>Insufficient evidence — score withheld</td></tr>
-          <tr><td>0.35 – 0.59</td><td>Low confidence</td></tr>
-          <tr><td>0.60 – 0.79</td><td>Moderate confidence</td></tr>
-          <tr><td>0.80 – 1.00</td><td>High confidence</td></tr>
-        </tbody>
-      </table>
-
-      <h2 className="mt-lg mb">Dimensions</h2>
-      <div className="grid grid-2">
-        {dimensions.map((d) => (
-          <div key={d.key} className="card">
-            <div className="row between">
-              <h3 style={{ margin: 0 }}>{d.name}</h3>
-              <span className="badge accent">{d.direction}</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {dimensions.map((dim) => (
+          <Card key={dim.key} className="p-4 mb-6">
+            <h2 className="text-lg font-medium text-slate-700 mb-3">
+              {dim.name}
+            </h2>
+            <p className="text-sm text-slate-500 mb-4">
+              {dim.description}
+            </p>
+            <div className="space-y-2">
+              {dim.indicators.map((ind) => (
+                <div key={ind.key} className="flex items-baseline text-xs">
+                  <span className="w-24 text-slate-500">{ind.key}</span>
+                  <span className="flex-1">
+                    <span className="font-medium">{ind.weight}</span>
+                    <span className="text-slate-400">weight</span>
+                  </span>
+                </div>
+              ))}
             </div>
-            <p className="muted small mt">{d.desc}</p>
-          </div>
+          </Card>
         ))}
       </div>
-
-      <h2 className="mt-lg mb">Caveats</h2>
-      <ul className="muted">
-        <li>Scores are descriptive evidence-weighted signals, not quality verdicts.</li>
-        <li>Technical Debt Risk is "lower is better".</li>
-        <li>A dimension with inadequate coverage is withheld, never scored as zero.</li>
-        <li>Testing Maturity is not a claim about actual test coverage.</li>
-        <li>LLM output is evidence-grounded and never used for scoring.</li>
-      </ul>
     </div>
   );
-}
+};
+
+export default MethodologyPage;

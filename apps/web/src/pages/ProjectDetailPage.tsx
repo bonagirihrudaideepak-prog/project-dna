@@ -62,6 +62,10 @@ export function ProjectDetailPage() {
 
       <div className="mt-lg">
         <div className="grid grid-2">
+          <Link to={`/projects/${id}/trends`} className="card" style={{ color: "var(--text)" }}>
+            <h3>Trends &amp; Alerts</h3>
+            <p className="muted small">DNA scores across snapshots and threshold alerts.</p>
+          </Link>
           <Link to={`/projects/${id}/dna`} className="card" style={{ color: "var(--text)" }}>
             <h3>DNA Profile</h3>
             <p className="muted small">Eight explainable dimensions with evidence drill-down.</p>

@@ -1,35 +1,40 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { AnalysisJob } from "../lib/types";
 
 export function useJob(jobId: string | null, onDone?: () => void) {
   const [job, setJob] = useState<AnalysisJob | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
 
   useEffect(() => {
     if (!jobId) return;
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const tick = async () => {
       try {
         const j = await api.job(jobId);
         if (cancelled) return;
         setJob(j);
         if (["COMPLETED", "FAILED", "CANCELLED"].includes(j.state)) {
-          if (j.state === "COMPLETED") onDone?.();
+          if (j.state === "COMPLETED") onDoneRef.current?.();
           if (j.state === "FAILED") setError(j.error_detail || "Analysis failed");
           return;
         }
-        setTimeout(tick, 1500);
+        timer = setTimeout(tick, 1500);
       } catch (e) {
         if (!cancelled) {
           setError(String(e));
-          setTimeout(tick, 3000);
+          timer = setTimeout(tick, 3000);
         }
       }
     };
     tick();
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [jobId]);
 
@@ -37,22 +42,11 @@ export function useJob(jobId: string | null, onDone?: () => void) {
 }
 
 export function useSnapshotId(projectId: string | undefined) {
-  const [snapshotId, setSnapshotId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!projectId) {
-      setLoading(false);
-      return;
-    }
-    api
-      .snapshots(projectId)
-      .then((snaps) => {
-        const completed = snaps.find((s) => s.status === "COMPLETED");
-        setSnapshotId(completed?.id ?? snaps[0]?.id ?? null);
-      })
-      .finally(() => setLoading(false));
-  }, [projectId]);
-
-  return { snapshotId, loading };
+  const { data: snaps, isLoading } = useQuery({
+    queryKey: ["snapshots", projectId],
+    queryFn: () => api.snapshots(projectId!),
+    enabled: !!projectId,
+  });
+  const completed = snaps?.find((s) => s.status === "COMPLETED");
+  return { snapshotId: completed?.id ?? snaps?.[0]?.id ?? null, loading: isLoading };
 }

@@ -1,6 +1,19 @@
 const BASE = "/api/v1";
 
-import type { User, ScoredDimension, ApiListResponse } from "./types";
+import type {
+  User,
+  DNAScore,
+  Project,
+  AnalysisJob,
+  Snapshot,
+  TimelineEvent,
+  Decision,
+  Experiment,
+  GraphData,
+  AlertRule,
+  Alert,
+  TrendPoint,
+} from "./types";
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(BASE + path, {
@@ -32,18 +45,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ full_name, branch }),
     }),
-  projects: () => request<ApiListResponse<Project>>("/projects"),
+  projects: () => request<Project[]>("/projects"),
   project: (id: string) => request<Project>(`/projects/${id}`),
   queueAnalysis: (projectId: string) =>
     request<AnalysisJob>(`/projects/${projectId}/analyses`, { method: "POST" }),
   job: (id: string) => request<AnalysisJob>(`/analysis-jobs/${id}`),
   snapshots: (projectId: string) =>
-    request<ApiListResponse<Snapshot>>(`/projects/${projectId}/snapshots`),
-  dna: (snapshotId: string) => request<ScoredDimension[]>(`/snapshots/${snapshotId}/dna`),
+    request<Snapshot[]>(`/projects/${projectId}/snapshots`),
+  dna: (snapshotId: string) => request<DNAScore[]>(`/snapshots/${snapshotId}/dna`),
   timeline: (snapshotId: string) =>
     request<TimelineEvent[]>(`/snapshots/${snapshotId}/timeline`),
   decisions: (projectId: string) =>
-    request<ApiListResponse<Decision>>(`/projects/${projectId}/decisions`),
+    request<Decision[]>(`/projects/${projectId}/decisions`),
   createDecision: (projectId: string, data: Record<string, unknown>) =>
     request<Decision>(`/projects/${projectId}/decisions`, {
       method: "POST",
@@ -57,7 +70,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
   experiments: (projectId: string) =>
-    request<ApiListResponse<Experiment>>(`/projects/${projectId}/experiments`),
+    request<Experiment[]>(`/projects/${projectId}/experiments`),
   createExperiment: (projectId: string, data: Record<string, unknown>) =>
     request<Experiment>(`/projects/${projectId}/experiments`, {
       method: "POST",
@@ -91,4 +104,20 @@ export const api = {
     if (!res.ok) throw new Error("Export failed");
     return res.text();
   },
+  trends: (projectId: string) => request<TrendPoint[]>(`/projects/${projectId}/trends`),
+  alertRules: (projectId: string) =>
+    request<AlertRule[]>(`/projects/${projectId}/alerts`),
+  createAlertRule: (projectId: string, data: { dimension: string; operator: "lt" | "gt"; threshold: number }) =>
+    request<AlertRule>(`/projects/${projectId}/alerts`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteAlertRule: (projectId: string, ruleId: string) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/alerts/${ruleId}`, {
+      method: "DELETE",
+    }),
+  alerts: (acknowledged = false) =>
+    request<Alert[]>(`/alerts${acknowledged ? "?acknowledged=true" : ""}`),
+  acknowledgeAlert: (alertId: string) =>
+    request<{ ok: boolean }>(`/alerts/${alertId}/acknowledge`, { method: "POST" }),
 };

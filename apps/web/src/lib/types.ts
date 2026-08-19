@@ -26,6 +26,7 @@ export interface DNAScore {
   confidence: string;
   direction: Direction;
   model_version: string;
+  explanation?: Record<string, unknown>;
 }
 
 export interface TimelineEvent {
@@ -143,6 +144,33 @@ export interface User {
   display_name: string | null;
   avatar_url: string | null;
   github_connected: boolean;
+}
+
+export interface AlertRule {
+  id: string;
+  project_id: string;
+  dimension: string;
+  operator: "lt" | "gt";
+  threshold: number;
+  enabled: boolean;
+}
+
+export interface Alert {
+  id: string;
+  rule_id: string;
+  snapshot_id: string;
+  dimension: string;
+  old_value: number | null;
+  new_value: number | null;
+  fired_at: string | null;
+  acknowledged_at: string | null;
+}
+
+export interface TrendPoint {
+  snapshot_id: string;
+  captured_at: string | null;
+  created_at: string | null;
+  scores: Record<string, number | null>;
 }
 
 // API response envelopes
