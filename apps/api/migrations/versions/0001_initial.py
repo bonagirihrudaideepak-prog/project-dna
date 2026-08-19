@@ -18,7 +18,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     from app.models import Base
-    from app.db import engine
 
     Base.metadata.create_all(bind=op.get_bind())
 
