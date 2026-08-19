@@ -18,6 +18,39 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: project-dna-redis
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   api:
     build:
@@ -31,17 +64,22 @@ services:
       - apps/api/.env
     environment:
       DATABASE_URL: postgresql+psycopg://projectdna:${POSTGRES_PASSWORD:-projectdna}@db:5432/projectdna
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       ENV: ${ENV:-production}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:5173}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
       FIXTURE_ROOT: /app/fixtures
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:?GITHUB_CLIENT_ID must be set}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:?GITHUB_CLIENT_SECRET must be set}
     ports:
       - "8000:8000"
     volumes:
       - ./fixtures:/app/fixtures:ro
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8000/api/health'); sys.exit(0)\""]
@@ -50,6 +88,16 @@ services:
       retries: 5
       start_period: 15s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   worker:
     build:
@@ -61,15 +109,82 @@ services:
       - apps/api/.env
     environment:
       DATABASE_URL: postgresql+psycopg://projectdna:${POSTGRES_PASSWORD:-projectdna}@db:5432/projectdna
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       ENV: ${ENV:-production}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
       FIXTURE_ROOT: /app/fixtures
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:?GITHUB_CLIENT_ID must be set}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:?GITHUB_CLIENT_SECRET must be set}
     volumes:
       - ./fixtures:/app/fixtures:ro
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backup:
+    image: postgres:17-alpine
+    container_name: project-dna-backup
+    environment:
+      PGHOST: db
+      PGUSER: projectdna
+      PGPASSWORD: ${POSTGRES_PASSWORD:-projectdna}
+      PGDATABASE: projectdna
+      KEEP_BACKUPS: ${KEEP_BACKUPS:-14}
+      BACKUP_WEBHOOK_URL: ${BACKUP_WEBHOOK_URL:-}
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    command: sh -c 'while true; do /backup.sh && sleep ${BACKUP_INTERVAL_SECONDS:-86400} || sleep 3600; done'
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: project-dna-web
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   pgdata:
+  redisdata:

@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.db import SessionLocal, init_db  # noqa: E402
+from app.adapters.db import SessionLocal, init_db  # noqa: E402
 from app.models import Project  # noqa: E402
 
 

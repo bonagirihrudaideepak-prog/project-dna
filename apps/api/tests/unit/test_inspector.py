@@ -5,7 +5,7 @@ from io import BytesIO
 
 import pytest
 
-from app.analysis.inspector import (
+from app.domain.analysis.inspector import (
     UnsafeArchiveError,
     categorize,
     inspect_file_bytes,
@@ -35,9 +35,8 @@ def test_binary_rejected():
 
 
 def test_safe_join_blocks_traversal():
-    from pathlib import Path
-
     import tempfile
+    from pathlib import Path
 
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)

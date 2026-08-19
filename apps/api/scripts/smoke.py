@@ -9,10 +9,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://projectdna:projectdna@localhost:5434/projectdna")
 os.environ.setdefault("FIXTURE_ROOT", "C:\\Users\\durga\\OneDrive\\Desktop\\ttgh\\project-dna\\fixtures")
 
+from app.adapters.db import SessionLocal  # noqa: E402
+from app.application.analysis import FixtureSource, run_snapshot_analysis  # noqa: E402
 from app.config import settings  # noqa: E402
-from app.db import SessionLocal  # noqa: E402
 from app.models import AnalysisJob, DNAScore, Project, RepositorySnapshot  # noqa: E402
-from app.services.analysis import FixtureSource, run_snapshot_analysis  # noqa: E402
 
 
 def run(full_name: str):

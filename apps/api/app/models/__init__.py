@@ -1,13 +1,6 @@
-from .base import Base
-from .identity import (
-    AnalysisJob,
-    GitHubConnection,
-    Project,
-    ProjectMembership,
-    RepositorySnapshot,
-    User,
-)
 from .analysis import (
+    Alert,
+    AlertRule,
     Artifact,
     DNAScore,
     FileChange,
@@ -15,6 +8,7 @@ from .analysis import (
     MetricValue,
     ScoreEvidence,
 )
+from .base import Base
 from .evolution import (
     Component,
     Decision,
@@ -34,6 +28,14 @@ from .governance import (
     GraphNode,
     LLMRun,
 )
+from .identity import (
+    AnalysisJob,
+    GitHubConnection,
+    Project,
+    ProjectMembership,
+    RepositorySnapshot,
+    User,
+)
 
 __all__ = [
     "Base",
@@ -49,6 +51,8 @@ __all__ = [
     "MetricValue",
     "DNAScore",
     "ScoreEvidence",
+    "AlertRule",
+    "Alert",
     "TimelineEvent",
     "EventArtifact",
     "Component",

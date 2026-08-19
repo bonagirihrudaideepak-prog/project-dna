@@ -1,6 +1,15 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -119,3 +128,56 @@ class ScoreEvidence(Base, TimestampMixin):
 
     score: Mapped["DNAScore"] = relationship(back_populates="evidence")
     metric_value: Mapped["MetricValue"] = relationship(back_populates="score_evidence")
+
+
+class AlertRule(Base, TimestampMixin):
+    """A per-project threshold on a DNA dimension.
+
+    Exactly one active rule per (project, dimension) in v1; alert evaluation
+    runs in the worker when a snapshot completes.
+    """
+
+    __tablename__ = "alert_rules"
+    __table_args__ = (UniqueConstraint("project_id", "dimension", name="uq_alert_rules_project_dimension"),)
+
+    id: Mapped[str] = uuid_pk()
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    dimension: Mapped[str] = mapped_column(String(40), nullable=False)
+    operator: Mapped[str] = mapped_column(String(4), nullable=False)  # 'lt' | 'gt'
+    threshold: Mapped[int] = mapped_column(Integer, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+
+    project: Mapped["Project"] = relationship(back_populates="alert_rules")
+    alerts: Mapped[list["Alert"]] = relationship(
+        back_populates="rule", cascade="all, delete-orphan"
+    )
+
+
+class Alert(Base, TimestampMixin):
+    """A fired alert for one (rule, snapshot) crossing; idempotent via unique key."""
+
+    __tablename__ = "alerts"
+    __table_args__ = (UniqueConstraint("rule_id", "snapshot_id", name="uq_alerts_rule_snapshot"),)
+
+    id: Mapped[str] = uuid_pk()
+    rule_id: Mapped[str] = mapped_column(
+        ForeignKey("alert_rules.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("repository_snapshots.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    dimension: Mapped[str] = mapped_column(String(40), nullable=False)  # denormalized for fast list
+    old_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    new_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fired_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    rule: Mapped["AlertRule"] = relationship(back_populates="alerts")
+    snapshot: Mapped["RepositorySnapshot"] = relationship()

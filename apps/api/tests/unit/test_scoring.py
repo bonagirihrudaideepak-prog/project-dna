@@ -1,11 +1,11 @@
 """Unit tests for the scoring engine and coverage/confidence rules."""
 
-from app.analysis.scoring.dimensions import (
+from app.domain.analysis.scoring.dimensions import (
     MIN_COVERAGE_FOR_SCORE,
     all_dimensions,
     confidence_for_coverage,
 )
-from app.analysis.scoring.engine import indicator_input, score_all, score_dimension
+from app.domain.analysis.scoring.engine import indicator_input, score_all, score_dimension
 
 
 def _full_inputs(values: dict[str, float]) -> dict:
@@ -101,7 +101,7 @@ def test_score_withheld_when_no_indicators_have_evidence():
 
 def test_technical_debt_risk_lower_is_better():
     """Technical debt risk should invert scores correctly."""
-    from app.analysis.scoring.dimensions import all_dimensions
+    from app.domain.analysis.scoring.dimensions import all_dimensions
     dims = {d.key: d for d in all_dimensions()}
     dim = dims["technical_debt_risk"]
     # high normalized value on lower_is_better dimension

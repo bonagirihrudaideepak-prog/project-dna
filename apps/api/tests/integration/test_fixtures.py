@@ -4,11 +4,8 @@ import json
 import os
 from pathlib import Path
 
-from sqlalchemy.orm import Session
-
-from app.analysis.inspector import inspect_directory
-from app.analysis.scoring.pipeline import run_pipeline
-from app.models import DNAScore
+from app.domain.analysis.inspector import inspect_directory
+from app.domain.analysis.scoring.pipeline import run_pipeline
 
 FIXTURE_ROOT = Path(os.environ["FIXTURE_ROOT"])
 

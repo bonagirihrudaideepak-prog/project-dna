@@ -2,11 +2,12 @@
 
 from datetime import datetime, timedelta
 
-from app.analysis.timeline.builder import (
+from app.domain.analysis.timeline.builder import (
     cluster_commits,
     detect_change_candidates,
     detect_component_overlap,
 )
+
 
 def _commit(day_offset: int, title: str, paths: list[str], provider_id: str) -> dict:
     dt = (datetime(2026, 1, 10) + timedelta(days=day_offset)).isoformat() + "Z"
