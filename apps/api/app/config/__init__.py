@@ -12,6 +12,8 @@ from .constants import (
     CACHE_DNA_TTL,
     CACHE_LIST_TTL,
     CACHE_PROJECT_TTL,
+    LLM_DEFAULT_MODELS,
+    LLM_OLLAMA_DEFAULT_MODEL,
     SESSION_TTL_SECONDS,
 )
 
@@ -77,14 +79,9 @@ class Settings(BaseSettings):
         explicit = getattr(self, f"llm_{provider}_model", "")
         if explicit:
             return explicit
-        fallbacks = {
-            "openrouter": "openai/gpt-4o-mini",
-            "groq": "llama-3.3-70b-versatile",
-            "gemini": "gemini-2.0-flash",
-            "nvidia": "meta/llama-3.3-70b-instruct",
-            "ollama": self.llm_ollama_model or "llama3.2",
-        }
-        return fallbacks.get(provider, self.llm_model)
+        if provider == "ollama":
+            return self.llm_ollama_model or LLM_OLLAMA_DEFAULT_MODEL
+        return LLM_DEFAULT_MODELS.get(provider, self.llm_model)
 
     @property
     def origins_list(self) -> list[str]:

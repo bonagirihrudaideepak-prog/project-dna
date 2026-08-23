@@ -17,8 +17,6 @@ from ..config import settings
 
 logger = logging.getLogger("projectdna.llm")
 
-DEFAULT_MODEL = "openai/gpt-4o-mini"
-
 
 class LLMService:
     """Encapsulates LLM calls with failover and deterministic fallback."""
@@ -33,17 +31,7 @@ class LLMService:
         return [p.strip() for p in raw.split(",") if p.strip()]
 
     def _model_for(self, provider: str) -> str:
-        explicit = getattr(settings, f"llm_{provider}_model", "")
-        if explicit:
-            return explicit
-        fallbacks = {
-            "openrouter": "openai/gpt-4o-mini",
-            "groq": "llama-3.3-70b-versatile",
-            "gemini": "gemini-2.0-flash",
-            "nvidia": "meta/llama-3.3-70b-instruct",
-            "ollama": settings.llm_ollama_model or "llama3.2",
-        }
-        return fallbacks.get(provider, settings.llm_model)
+        return settings.llm_model_for(provider)
 
     def _is_configured(self, provider: str) -> bool:
         if provider == "ollama":
@@ -56,17 +44,8 @@ class LLMService:
         last_error: Exception | None = None
 
         for provider in order:
-            if provider not in settings.llm_provider_order and provider not in (
-                "openrouter",
-                "groq",
-                "gemini",
-                "nvidia",
-                "ollama",
-            ):
-                last_error = Exception(f"Unknown provider '{provider}'")
-                continue
             if not self._is_configured(provider):
-                last_error = Exception(f"Provider '{provider}' is not configured (missing key)")
+                last_error = LLMError(f"Provider '{provider}' is not configured (missing key)")
                 continue
             try:
                 model = self._model_for(provider)

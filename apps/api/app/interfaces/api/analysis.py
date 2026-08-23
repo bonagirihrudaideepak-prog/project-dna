@@ -11,6 +11,7 @@ from ...application.exports import to_json, to_print_html
 from ...application.llm_service import LLMService
 from ...application.similarity import model_compatible, weighted_distance
 from ...config import settings
+from ...config.constants import PROJECT_REFERENCES_MAX
 from ...models import (
     Decision,
     DNAScore,
@@ -146,8 +147,18 @@ def create_summary(snapshot_id: str, body: SummaryIn, user_id: str = Depends(cur
         }
 
     dna_rows = db.query(DNAScore).filter(DNAScore.snapshot_id == s.id).all()
-    decisions = db.query(Decision).filter(Decision.project_id == s.project_id).all()
-    experiments = db.query(Experiment).filter(Experiment.project_id == s.project_id).all()
+    decisions = (
+        db.query(Decision)
+        .filter(Decision.project_id == s.project_id)
+        .limit(PROJECT_REFERENCES_MAX)
+        .all()
+    )
+    experiments = (
+        db.query(Experiment)
+        .filter(Experiment.project_id == s.project_id)
+        .limit(PROJECT_REFERENCES_MAX)
+        .all()
+    )
 
     dna_text = "\n".join(
         f"- {r.dimension}: score={r.score if r.score is not None else 'withheld'} "
@@ -211,9 +222,24 @@ def queue_export(snapshot_id: str, fmt: str = "json", user_id: str | None = Depe
 
 def _snapshot_payload(db: Session, s: RepositorySnapshot, fmt: str):
     dna = _dna_map(db, s.id)
-    timeline = db.query(TimelineEvent).filter(TimelineEvent.snapshot_id == s.id).all()
-    decisions = db.query(Decision).filter(Decision.project_id == s.project_id).all()
-    experiments = db.query(Experiment).filter(Experiment.project_id == s.project_id).all()
+    timeline = (
+        db.query(TimelineEvent)
+        .filter(TimelineEvent.snapshot_id == s.id)
+        .limit(PROJECT_REFERENCES_MAX)
+        .all()
+    )
+    decisions = (
+        db.query(Decision)
+        .filter(Decision.project_id == s.project_id)
+        .limit(PROJECT_REFERENCES_MAX)
+        .all()
+    )
+    experiments = (
+        db.query(Experiment)
+        .filter(Experiment.project_id == s.project_id)
+        .limit(PROJECT_REFERENCES_MAX)
+        .all()
+    )
     data = {
         "project": {
             "id": str(s.project.id),

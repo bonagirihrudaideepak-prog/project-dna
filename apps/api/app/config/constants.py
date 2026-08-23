@@ -35,6 +35,16 @@ LLM_TIMEOUT_SECONDS: int = 60
 LLM_TEMPERATURE: float = 0.2
 LLM_MAX_TOKENS: int = 700
 
+# Per-provider default models when no llm_<provider>_model is configured.
+# Ollama's default is dynamic (settings.llm_ollama_model) and handled by consumers.
+LLM_DEFAULT_MODELS: dict[str, str] = {
+    "openrouter": "openai/gpt-4o-mini",
+    "groq": "llama-3.3-70b-versatile",
+    "gemini": "gemini-2.0-flash",
+    "nvidia": "meta/llama-3.3-70b-instruct",
+}
+LLM_OLLAMA_DEFAULT_MODEL: str = "llama3.2"
+
 # Prometheus histogram buckets
 HISTOGRAM_BUCKETS: tuple[float, ...] = (0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
 
@@ -49,6 +59,22 @@ DIMENSION_ORDER: list[str] = [
     "scalability_readiness",
     "technical_debt_risk",
 ]
+
+# List-endpoint guardrails: generous ceilings so unbounded growth cannot OOM a
+# request; normal projects are far below these.
+TRENDS_MAX_SNAPSHOTS: int = 200
+SNAPSHOTS_MAX_LIST: int = 200
+TIMELINE_MAX_EVENTS: int = 500
+PROJECT_REFERENCES_MAX: int = 500
+ALERTS_INBOX_MAX: int = 200
+
+# Analysis job states (kept in one place; SQL literals must match)
+JOB_STATE_QUEUED: str = "QUEUED"
+JOB_STATE_RUNNING: str = "RUNNING"
+JOB_STATE_RETRY: str = "RETRY"
+JOB_STATE_COMPLETED: str = "COMPLETED"
+JOB_STATE_FAILED: str = "FAILED"
+JOB_STATE_CANCELLED: str = "CANCELLED"
 
 # Confidence label thresholds (ascending)
 COVERAGE_LABEL_THRESHOLDS: list[tuple[float, str]] = [

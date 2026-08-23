@@ -12,20 +12,31 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-MODEL_VERSION = "dna-core-1.0"
-MIN_COVERAGE_FOR_SCORE = 0.35
+from ....config.constants import (
+    COVERAGE_HIGH,
+    COVERAGE_INSUFFICIENT,
+    COVERAGE_LOW,
+    COVERAGE_MODERATE,
+)
 
+MODEL_VERSION = "dna-core-1.0"
+MIN_COVERAGE_FOR_SCORE = COVERAGE_INSUFFICIENT
+
+# Single source of truth for band boundaries lives in config/constants and is
+# what /api/methodology serves. Semantics are "below the threshold", matching
+# the methodology contract: coverage exactly 0.35 is scorable and therefore
+# "low", not "insufficient".
 COVERAGE_LABELS = [
-    (0.35, "insufficient"),
-    (0.59, "low"),
-    (0.79, "moderate"),
-    (1.01, "high"),
+    (COVERAGE_INSUFFICIENT, "insufficient"),
+    (COVERAGE_LOW, "low"),
+    (COVERAGE_MODERATE, "moderate"),
+    (COVERAGE_HIGH, "high"),
 ]
 
 
 def confidence_for_coverage(coverage: float) -> str:
     for threshold, label in COVERAGE_LABELS:
-        if coverage <= threshold:
+        if coverage < threshold:
             return label
     return "high"
 

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ...adapters.cache_service import CacheService
 from ...adapters.db import get_db
 from ...config import settings
-from ...config.constants import DIMENSION_ORDER
+from ...config.constants import DIMENSION_ORDER, TIMELINE_MAX_EVENTS
 from ...models import DNAScore, MetricValue, RepositorySnapshot, TimelineEvent
 from ..deps import current_user, optional_user, parse_id
 from ..schemas import EventPatchIn
@@ -97,7 +97,7 @@ def get_timeline(
     q = db.query(TimelineEvent).filter(TimelineEvent.snapshot_id == snap.id)
     if event_type:
         q = q.filter(TimelineEvent.type == event_type)
-    events = q.order_by(TimelineEvent.occurred_at.desc()).all()
+    events = q.order_by(TimelineEvent.occurred_at.desc()).limit(TIMELINE_MAX_EVENTS).all()
     out = []
     for e in events:
         meta = e.metadata_json or {}

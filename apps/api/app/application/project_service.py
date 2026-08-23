@@ -65,10 +65,19 @@ def is_fixture(full_name: str) -> bool:
 
 
 def import_project(db: Session, user_id: str, full_name: str, branch: str | None) -> Project:
-    """Import an owner/repo reference, or join an existing project as member."""
+    """Import an owner/repo reference, or join an existing project as member.
+
+    The existence check + insert is serialized with a transaction-scoped
+    advisory lock keyed on the repo name, so two concurrent imports of the
+    same repo cannot both create a project. (A unique constraint would be
+    redundant armor once a data-merge migration is written for legacy dups.)"""
     parts = full_name.split("/")
     if len(parts) != 2:
         raise ValidationError("Expected owner/repo")
+
+    from sqlalchemy import text
+
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:full_name))"), {"full_name": full_name})
 
     existing = db.query(Project).filter(Project.full_name == full_name).first()
     if existing:

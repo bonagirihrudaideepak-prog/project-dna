@@ -115,14 +115,15 @@ def test_technical_debt_risk_lower_is_better():
 
 
 def test_confidence_progression():
-    """Confidence progresses with coverage thresholds."""
-    # Function uses: coverage <= threshold -> label (first match wins)
-    # Labels: insufficient (0.35), low (0.59), moderate (0.79), high (1.01)
-    # Original test confirms: confidence_for_coverage(0.90) == "high"
+    """Confidence progresses with coverage thresholds (below-threshold bands,
+    aligned with config/constants and /api/methodology)."""
     assert confidence_for_coverage(0.34) == "insufficient"
-    assert confidence_for_coverage(0.35) == "insufficient"  # boundary
-    assert confidence_for_coverage(0.58) == "low"  # 0.58 <= 0.59
-    assert confidence_for_coverage(0.59) == "low"  # 0.59 <= 0.59
-    assert confidence_for_coverage(0.78) == "moderate"  # 0.78 <= 0.79
-    assert confidence_for_coverage(0.79) == "moderate"  # 0.79 <= 0.79
-    assert confidence_for_coverage(0.90) == "high"  # 0.90 <= 1.01, first match
+    assert confidence_for_coverage(0.35) == "low"  # 0.35 is scorable, not insufficient
+    assert confidence_for_coverage(0.58) == "low"
+    assert confidence_for_coverage(0.59) == "low"  # 0.59 < 0.60
+    assert confidence_for_coverage(0.595) == "low"  # regression: drifted band said moderate
+    assert confidence_for_coverage(0.60) == "moderate"
+    assert confidence_for_coverage(0.78) == "moderate"
+    assert confidence_for_coverage(0.79) == "moderate"  # 0.79 < 0.80
+    assert confidence_for_coverage(0.80) == "high"
+    assert confidence_for_coverage(0.90) == "high"

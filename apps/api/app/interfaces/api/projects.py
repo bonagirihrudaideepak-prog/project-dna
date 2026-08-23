@@ -33,6 +33,7 @@ from ...application.project_service import (
     resolve_project,
 )
 from ...config import settings
+from ...config.constants import SNAPSHOTS_MAX_LIST
 from ...models import AnalysisJob, Project, ProjectMembership, RepositorySnapshot
 from ..deps import current_user, optional_user, parse_id
 from ..schemas import AnalysisJobOut, GitHubRepoOut, ImportProjectIn, ProjectOut, SnapshotOut
@@ -302,6 +303,7 @@ def list_snapshots(project_id: str, user_id: str | None = Depends(optional_user)
         db.query(RepositorySnapshot)
         .filter(RepositorySnapshot.project_id == project.id)
         .order_by(RepositorySnapshot.created_at.desc())
+        .limit(SNAPSHOTS_MAX_LIST)
         .all()
     )
     payload = [_snapshot_out(s).model_dump(mode="json") for s in snapshots]

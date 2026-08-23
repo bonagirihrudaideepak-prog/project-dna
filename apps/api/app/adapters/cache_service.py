@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from typing import Any
 
 from ..config import settings
@@ -22,6 +23,22 @@ logger = logging.getLogger("projectdna.cache_service")
 
 # Key namespaces invalidated together when a project mutates.
 _PROJECT_LIST_PREFIX = "projects:list:"
+
+# Per-key locks so a hot expiring key is computed once per process instead of
+# by every concurrent request (stampede protection).
+_locks_guard = threading.Lock()
+_key_locks: dict[str, threading.Lock] = {}
+_MAX_KEY_LOCKS = 5_000
+
+
+def _key_lock(key: str) -> threading.Lock:
+    with _locks_guard:
+        lock = _key_locks.get(key)
+        if lock is None:
+            if len(_key_locks) >= _MAX_KEY_LOCKS:
+                _key_locks.clear()  # crude bound; recomputed lazily afterwards
+            lock = _key_locks.setdefault(key, threading.Lock())
+        return lock
 
 
 class CacheService:
@@ -126,7 +143,11 @@ class CacheService:
     # ── Metrics-aware cache-aside ───────────────────────────────────────
 
     def get_or_compute(self, key: str, compute_fn, ttl: int | None = None) -> Any:
-        """Cache-aside pattern with metrics: return cached if available, else compute."""
+        """Cache-aside with metrics and per-key singleflight.
+
+        On a miss, concurrent callers serialize on the key's lock; whoever
+        enters second finds the freshly computed value in cache instead of
+        re-running ``compute_fn``."""
         c = self._ensure_redis()
         if c is None:
             return compute_fn()
@@ -136,11 +157,19 @@ class CacheService:
             if raw is not None:
                 metrics.cache_hits.inc()
                 return json.loads(raw)
-
-            metrics.cache_misses.inc()
-            result = compute_fn()
-            c.set(key, json.dumps(result, default=str), ex=ttl or settings.cache_default_ttl)
-            return result
         except Exception:  # noqa: BLE001
-            metrics.cache_misses.inc()
             return compute_fn()
+
+        metrics.cache_misses.inc()
+        with _key_lock(key):
+            try:
+                raw = c.get(key)  # winner may have filled it while we waited
+                if raw is not None:
+                    metrics.cache_hits.inc()
+                    return json.loads(raw)
+                result = compute_fn()
+                c.set(key, json.dumps(result, default=str), ex=ttl or settings.cache_default_ttl)
+                return result
+            except Exception:  # noqa: BLE001
+                metrics.cache_misses.inc()
+                return compute_fn()

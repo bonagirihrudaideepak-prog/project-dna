@@ -217,17 +217,23 @@ def metrics_endpoint():
 
 @app.get("/api/methodology")
 def methodology():
+    from .config.constants import DIMENSION_ORDER
+    from .domain.analysis.scoring.dimensions import DIMENSIONS, MODEL_VERSION
+
     return {
-        "model_version": "dna-core-1.0",
+        "model_version": MODEL_VERSION,
         "dimensions": [
-            {"key": "technical_complexity", "name": "Technical Complexity", "direction": "descriptive"},
-            {"key": "maintainability", "name": "Maintainability", "direction": "higher_is_better"},
-            {"key": "testing_maturity", "name": "Testing Maturity", "direction": "higher_is_better"},
-            {"key": "documentation_quality", "name": "Documentation Quality", "direction": "higher_is_better"},
-            {"key": "evolution_health", "name": "Evolution Health", "direction": "higher_is_better"},
-            {"key": "delivery_readiness", "name": "Delivery Readiness", "direction": "higher_is_better"},
-            {"key": "scalability_readiness", "name": "Scalability Readiness", "direction": "higher_is_better"},
-            {"key": "technical_debt_risk", "name": "Technical Debt Risk", "direction": "lower_is_better"},
+            {
+                "key": d.key,
+                "name": d.name,
+                "direction": d.direction,
+                "description": d.description,
+                "indicators": [
+                    {"key": i.key, "weight": i.weight, "direction": i.direction}
+                    for i in d.indicators
+                ],
+            }
+            for d in (DIMENSIONS[k] for k in DIMENSION_ORDER if k in DIMENSIONS)
         ],
         "coverage_labels": [
             {"below": 0.35, "label": "insufficient"},

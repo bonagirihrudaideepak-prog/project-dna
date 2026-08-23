@@ -10,14 +10,12 @@ from __future__ import annotations
 import httpx
 
 from ...config import settings
+from ...config.constants import LLM_DEFAULT_MODELS, LLM_OLLAMA_DEFAULT_MODEL
 from .base import LLMError
 
 DEFAULT_MODELS: dict[str, str] = {
-    "openrouter": "openai/gpt-4o-mini",
-    "groq": "llama-3.3-70b-versatile",
-    "gemini": "gemini-2.0-flash",
-    "nvidia": "meta/llama-3.3-70b-instruct",
-    "ollama": settings.llm_ollama_model or "llama3.2",
+    **LLM_DEFAULT_MODELS,
+    "ollama": settings.llm_ollama_model or LLM_OLLAMA_DEFAULT_MODEL,
 }
 
 ENDPOINTS: dict[str, str] = {

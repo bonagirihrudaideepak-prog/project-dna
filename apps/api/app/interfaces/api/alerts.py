@@ -1,34 +1,40 @@
-"""Trends and alerts endpoints for the DNA dashboard."""
+"""Trends and alerts endpoints for the DNA dashboard.
+
+Thin HTTP layer over ``application/alert_service``.
+"""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from ...adapters.cache_service import CacheService
 from ...adapters.db import get_db
+from ...application.alert_service import (
+    acknowledge_alert as acknowledge_usecase,
+)
+from ...application.alert_service import (
+    create_rule as create_rule_usecase,
+)
+from ...application.alert_service import (
+    delete_rule as delete_rule_usecase,
+)
+from ...application.alert_service import (
+    list_alerts as list_alerts_usecase,
+)
+from ...application.alert_service import (
+    list_rules as list_rules_usecase,
+)
+from ...application.alert_service import (
+    update_rule as update_rule_usecase,
+)
 from ...config import settings
-from ...models import Alert, AlertRule, DNAScore, Project, ProjectMembership, RepositorySnapshot
+from ...config.constants import COVERAGE_INSUFFICIENT, TRENDS_MAX_SNAPSHOTS
+from ...models import DNAScore, RepositorySnapshot
 from ..deps import current_user, optional_user, parse_id
 from ..schemas import AlertOut, AlertRuleIn, AlertRuleOut, TrendPoint
 from .projects import require_membership
 
 router = APIRouter(tags=["alerts"])
-
-_cache_service = CacheService()
-
-DIMENSIONS = {
-    "technical_complexity",
-    "maintainability",
-    "testing_maturity",
-    "documentation_quality",
-    "evolution_health",
-    "delivery_readiness",
-    "scalability_readiness",
-    "technical_debt_risk",
-}
 
 
 @router.get("/projects/{project_id}/trends", response_model=list[TrendPoint])
@@ -37,32 +43,42 @@ def get_trends(
     user_id: str | None = Depends(optional_user),
     db: Session = Depends(get_db),
 ):
+    from ...adapters.cache_service import CacheService
+
+    cache_service = CacheService()
     pid = parse_id(project_id, "project_id")
     project = require_membership(db, pid, user_id)
     cache_key = f"trends:{project.id}"
-    cached = _cache_service.get(cache_key)
+    cached = cache_service.get(cache_key)
     if cached is not None:
         return cached
+    # Bounded window + scalar columns only: trends is a chart feed, and
+    # loading every snapshot's full row (incl. JSONB) does not scale.
     snapshots = (
-        db.query(RepositorySnapshot)
+        db.query(
+            RepositorySnapshot.id,
+            RepositorySnapshot.captured_at,
+            RepositorySnapshot.created_at,
+        )
         .filter(RepositorySnapshot.project_id == project.id)
-        .order_by(RepositorySnapshot.created_at.asc())
+        .order_by(RepositorySnapshot.created_at.desc())
+        .limit(TRENDS_MAX_SNAPSHOTS)
         .all()
     )
     if not snapshots:
         return []
+    snapshots.reverse()  # oldest first for the chart
     ids = [s.id for s in snapshots]
     scores = (
-        db.query(DNAScore)
+        db.query(DNAScore.snapshot_id, DNAScore.dimension, DNAScore.score, DNAScore.coverage)
         .filter(DNAScore.snapshot_id.in_(ids))
-        .order_by(DNAScore.dimension)
         .all()
     )
     scores_by_snap: dict[str, dict[str, int | None]] = {}
-    for sc in scores:
+    for snapshot_id, dimension, score, coverage in scores:
         # Withheld scores (coverage < 0.35) stay None -> rendered as gaps.
-        scores_by_snap.setdefault(sc.snapshot_id, {})[sc.dimension] = (
-            sc.score if sc.coverage >= 0.35 else None
+        scores_by_snap.setdefault(snapshot_id, {})[dimension] = (
+            score if coverage >= COVERAGE_INSUFFICIENT else None
         )
     payload = [
         TrendPoint(
@@ -73,7 +89,7 @@ def get_trends(
         ).model_dump(mode="json")
         for s in snapshots
     ]
-    _cache_service.set(cache_key, payload, ttl=settings.cache_dna_ttl)
+    cache_service.set(cache_key, payload, ttl=settings.cache_dna_ttl)
     return payload
 
 
@@ -85,8 +101,7 @@ def list_rules(
 ):
     pid = parse_id(project_id, "project_id")
     project = require_membership(db, pid, user_id)
-    rules = db.query(AlertRule).filter(AlertRule.project_id == project.id).all()
-    return rules
+    return list_rules_usecase(db, project)
 
 
 @router.post("/projects/{project_id}/alerts", response_model=AlertRuleOut, status_code=201)
@@ -98,27 +113,7 @@ def create_rule(
 ):
     pid = parse_id(project_id, "project_id")
     project = require_membership(db, pid, user_id)
-    if body.dimension not in DIMENSIONS:
-        raise HTTPException(status_code=422, detail=f"Unknown dimension: {body.dimension}")
-    existing = (
-        db.query(AlertRule)
-        .filter(AlertRule.project_id == project.id, AlertRule.dimension == body.dimension)
-        .first()
-    )
-    if existing:
-        raise HTTPException(status_code=409, detail="A rule already exists for this dimension")
-    rule = AlertRule(
-        project_id=project.id,
-        dimension=body.dimension,
-        operator=body.operator,
-        threshold=body.threshold,
-        enabled=True,
-        created_by=user_id,
-    )
-    db.add(rule)
-    db.commit()
-    _cache_service.invalidate_project(project.id)
-    return rule
+    return create_rule_usecase(db, project, user_id, body.dimension, body.operator, body.threshold)
 
 
 @router.patch("/projects/{project_id}/alerts/{rule_id}", response_model=AlertRuleOut)
@@ -131,17 +126,9 @@ def update_rule(
 ):
     pid = parse_id(project_id, "project_id")
     project = require_membership(db, pid, user_id)
-    rule = db.get(AlertRule, parse_id(rule_id, "rule_id"))
-    if not rule or rule.project_id != project.id:
-        raise HTTPException(status_code=404, detail="Rule not found")
-    if body.dimension not in DIMENSIONS:
-        raise HTTPException(status_code=422, detail=f"Unknown dimension: {body.dimension}")
-    rule.dimension = body.dimension
-    rule.operator = body.operator
-    rule.threshold = body.threshold
-    db.commit()
-    _cache_service.invalidate_project(project.id)
-    return rule
+    return update_rule_usecase(
+        db, project, parse_id(rule_id, "rule_id"), body.dimension, body.operator, body.threshold
+    )
 
 
 @router.delete("/projects/{project_id}/alerts/{rule_id}")
@@ -153,12 +140,7 @@ def delete_rule(
 ):
     pid = parse_id(project_id, "project_id")
     project = require_membership(db, pid, user_id)
-    rule = db.get(AlertRule, parse_id(rule_id, "rule_id"))
-    if not rule or rule.project_id != project.id:
-        raise HTTPException(status_code=404, detail="Rule not found")
-    db.delete(rule)
-    db.commit()
-    _cache_service.invalidate_project(project.id)
+    delete_rule_usecase(db, project, parse_id(rule_id, "rule_id"))
     return {"ok": True}
 
 
@@ -168,36 +150,10 @@ def list_alerts(
     user_id: str | None = Depends(optional_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Alert).join(AlertRule).join(Project)
-    if user_id:
-        member_ids = [
-            m.project_id
-            for m in db.query(ProjectMembership).filter(ProjectMembership.user_id == user_id).all()
-        ]
-        if settings.env == "development":
-            fixture_ids = [
-                p.id for p in db.query(Project).filter(Project.is_fixture.is_(True)).all()
-            ]
-            query = query.filter(AlertRule.project_id.in_(set(member_ids) | set(fixture_ids)))
-        else:
-            query = query.filter(AlertRule.project_id.in_(member_ids))
-    elif settings.env == "development":
-        fixture_ids = [p.id for p in db.query(Project).filter(Project.is_fixture.is_(True)).all()]
-        query = query.filter(AlertRule.project_id.in_(fixture_ids))
-    else:
-        query = query.filter(False)
-    if not acknowledged:
-        query = query.filter(Alert.acknowledged_at.is_(None))
-    return query.order_by(Alert.fired_at.desc()).limit(200).all()
+    return list_alerts_usecase(db, user_id, acknowledged)
 
 
 @router.post("/alerts/{alert_id}/acknowledge")
 def acknowledge_alert(alert_id: str, user_id: str = Depends(current_user), db: Session = Depends(get_db)):
-    alert = db.get(Alert, parse_id(alert_id, "alert_id"))
-    if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
-    require_membership(db, alert.rule.project_id, user_id)
-    if alert.acknowledged_at is None:
-        alert.acknowledged_at = datetime.now(timezone.utc)
-        db.commit()
+    acknowledge_usecase(db, parse_id(alert_id, "alert_id"), user_id)
     return {"ok": True}

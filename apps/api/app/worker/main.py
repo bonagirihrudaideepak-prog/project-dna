@@ -27,6 +27,13 @@ from ..adapters.github import GitHubAdapter
 from ..adapters.security import decrypt_token
 from ..application.analysis import FixtureSource, run_snapshot_analysis
 from ..config import settings
+from ..config.constants import (
+    JOB_STATE_COMPLETED,
+    JOB_STATE_FAILED,
+    JOB_STATE_QUEUED,
+    JOB_STATE_RETRY,
+    JOB_STATE_RUNNING,
+)
 from ..domain.analysis.alerts import RuleSpec, ScoreSnapshot, evaluate_scores
 from ..models import (
     Alert,
@@ -49,7 +56,7 @@ DEAD_MAN_SWITCH_SECONDS = 300  # reclaim if no heartbeat within 5 min
 CLAIM_SQL = text("""
 SELECT j.id
 FROM analysis_jobs j
-WHERE j.state IN ('QUEUED', 'RETRY')
+WHERE j.state IN (:queued, :retry)
   AND j.attempts < :max_attempts
   AND (j.lease_until IS NULL OR j.lease_until < :now)
 ORDER BY j.created_at ASC
@@ -117,12 +124,12 @@ def _make_source(snapshot: RepositorySnapshot):
 
 def _claim_job() -> AnalysisJob | None:
     with engine.begin() as conn:
-        row = conn.execute(CLAIM_SQL, {"max_attempts": MAX_ATTEMPTS, "now": datetime.now(timezone.utc)}).first()
+        row = conn.execute(CLAIM_SQL, {"max_attempts": MAX_ATTEMPTS, "now": datetime.now(timezone.utc), "queued": JOB_STATE_QUEUED, "retry": JOB_STATE_RETRY}).first()
         if not row:
             return None
         conn.execute(
-            text("UPDATE analysis_jobs SET state='RUNNING', lease_until=:lease WHERE id=:id"),
-            {"lease": datetime.now(timezone.utc) + timedelta(seconds=JOB_LEASE_SECONDS), "id": row[0]},
+            text("UPDATE analysis_jobs SET state=:state, lease_until=:lease WHERE id=:id"),
+            {"lease": datetime.now(timezone.utc) + timedelta(seconds=JOB_LEASE_SECONDS), "id": row[0], "state": JOB_STATE_RUNNING},
         )
         job_id = row[0]
     db = SessionLocal()
@@ -203,7 +210,7 @@ def _queue_depth() -> int:
     with engine.connect() as conn:
         return (
             conn.execute(
-                text("SELECT count(*) FROM analysis_jobs WHERE state IN ('QUEUED', 'RETRY')")
+                text("SELECT count(*) FROM analysis_jobs WHERE state IN (:q, :r)"), {"q": JOB_STATE_QUEUED, "r": JOB_STATE_RETRY}
             ).scalar()
             or 0
         )
@@ -310,18 +317,18 @@ def worker_once() -> int:
             if j:
                 # Check dead man's switch: if lease is stale, treat as failure
                 if _dead_man_switch(job_id):
-                    j.state = "FAILED"
+                    j.state = JOB_STATE_FAILED
                     j.error_code = "DEAD_MAN_SWITCH"
                     j.error_detail = "Job lease stale; no heartbeat received within window"
                 elif j.attempts >= MAX_ATTEMPTS or _deadline_passed(job_id):
-                    j.state = "FAILED"
+                    j.state = JOB_STATE_FAILED
                     j.error_code = getattr(exc, "code", "WORKER_FAILED")
                     j.error_detail = str(exc)[:2000]
                     snapshot = db.get(RepositorySnapshot, j.snapshot_id)
-                    if snapshot and snapshot.status != "COMPLETED":
-                        snapshot.status = "FAILED"
+                    if snapshot and snapshot.status != JOB_STATE_COMPLETED:
+                        snapshot.status = JOB_STATE_FAILED
                 else:
-                    j.state = "RETRY"
+                    j.state = JOB_STATE_RETRY
                     j.error_code = getattr(exc, "code", "WORKER_FAILED")
                     j.error_detail = str(exc)[:2000]
                 j.finished_at = datetime.now(timezone.utc)
