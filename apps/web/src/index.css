@@ -481,6 +481,14 @@ button {
 .focus-visible\:ring-lavenderPrimary:focus-visible { outline-color: var(--lavender-primary); }
 .focus-visible\:ring-primary:focus-visible { outline-color: var(--lavender-primary); }
 
+/* Button sizing utilities (used by lib/components primitives) */
+.h-8 { height: 2rem; }
+.h-10 { height: 2.5rem; }
+.h-12 { height: 3rem; }
+.px-3 { padding-left: var(--spacing-3); padding-right: var(--spacing-3); }
+.px-4 { padding-left: var(--spacing-4); padding-right: var(--spacing-4); }
+.px-6 { padding-left: var(--spacing-6); padding-right: var(--spacing-6); }
+
 /* ============ Animations ============ */
 .animate-spin { animation: spin 1s linear infinite; }
 .loading { animation: spin 1s linear infinite; }

@@ -189,3 +189,29 @@ export interface ApiErrorResponse {
     retryable: boolean;
   };
 }
+export interface MethodologyIndicator {
+  key: string;
+  weight: number;
+  direction: Direction;
+}
+
+export interface MethodologyDimension {
+  key: string;
+  name: string;
+  direction: Direction;
+  description: string;
+  indicators: MethodologyIndicator[];
+}
+
+export interface CoverageLabel {
+  below: number;
+  label: string;
+}
+
+export interface Methodology {
+  model_version: string;
+  dimensions: MethodologyDimension[];
+  coverage_labels: CoverageLabel[];
+  min_coverage_for_score: number;
+  caveats: string[];
+}

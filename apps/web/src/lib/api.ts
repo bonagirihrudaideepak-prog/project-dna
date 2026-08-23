@@ -13,10 +13,14 @@ import type {
   AlertRule,
   Alert,
   TrendPoint,
+  Methodology,
 } from "./types";
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(BASE + path, {
+  // Paths under /api/ are taken verbatim (non-versioned endpoints like
+  // /api/methodology); everything else is relative to the versioned base.
+  const url = path.startsWith("/api/") ? path : BASE + path;
+  const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     ...options,
@@ -36,15 +40,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   me: () => request<User>("/auth/me").catch(() => null),
-  repositories: (q = "") =>
-    request<Project[]>(
-      "/github/repositories" + (q ? `?q=${encodeURIComponent(q)}` : ""),
-    ),
-  importProject: (full_name: string, branch?: string) =>
-    request<Project>("/projects/import", {
-      method: "POST",
-      body: JSON.stringify({ full_name, branch }),
-    }),
   projects: () => request<Project[]>("/projects"),
   project: (id: string) => request<Project>(`/projects/${id}`),
   queueAnalysis: (projectId: string) =>
@@ -62,8 +57,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  updateDecision: (id: string, data: Record<string, unknown>) =>
-    request<Decision>(`/decisions/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   addOutcomeReview: (id: string, data: Record<string, unknown>) =>
     request<Decision>(`/decisions/${id}/outcome-reviews`, {
       method: "POST",
@@ -76,8 +69,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  updateExperiment: (id: string, data: Record<string, unknown>) =>
-    request<Experiment>(`/experiments/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   compare: (a: string, b: string) =>
     request<Record<string, unknown>>("/comparisons", {
       method: "POST",
@@ -87,11 +78,6 @@ export const api = {
     request<GraphData>(
       `/snapshots/${snapshotId}/graph` + (focus ? `?focus=${encodeURIComponent(focus)}&depth=${depth}` : ""),
     ),
-  summary: (snapshotId: string) =>
-    request<Record<string, unknown>>(`/snapshots/${snapshotId}/summaries`, {
-      method: "POST",
-      body: JSON.stringify({}),
-    }),
   exportJson: (snapshotId: string) =>
     request<Record<string, unknown>>(`/snapshots/${snapshotId}/exports?fmt=json`, {
       method: "POST",
@@ -120,4 +106,5 @@ export const api = {
     request<Alert[]>(`/alerts${acknowledged ? "?acknowledged=true" : ""}`),
   acknowledgeAlert: (alertId: string) =>
     request<{ ok: boolean }>(`/alerts/${alertId}/acknowledge`, { method: "POST" }),
+  methodology: () => request<Methodology>("/api/methodology"),
 };

@@ -20,12 +20,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variantStyles: Record<string, string> = {
       primary:
-        "bg-lavenderPrimary text-white hover:bg-[#5C3BAA] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-lavenderPrimary",
+        "bg-lavenderPrimary text-white hover:bg-lavenderPrimary focus-visible:ring-2 focus-visible:ring-lavenderPrimary",
       secondary:
-        "bg-transparent text-slate600 border border-borderDefault hover:bg-slate100 focus-visible:ring-2 focus-visible:ring-offset-2",
+        "bg-transparent text-slate-600 border border-borderDefault hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-lavenderPrimary",
       outline:
-        "bg-transparent text-lavenderPrimary border border-lavenderPrimary hover:bg-lavenderSoft focus-visible:ring-2 focus-visible:ring-offset-2",
-      ghost: "bg-transparent text-slate600 hover:bg-slate100",
+        "bg-transparent text-lavenderPrimary border border-lavenderPrimary hover:bg-lavenderSoft focus-visible:ring-2 focus-visible:ring-lavenderPrimary",
+      ghost: "bg-transparent text-slate-600 hover:bg-slate-50",
     };
 
     const style = variantStyles[variant] || variantStyles.primary;

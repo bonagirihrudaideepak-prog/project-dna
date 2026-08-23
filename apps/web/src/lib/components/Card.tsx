@@ -1,6 +1,5 @@
 import { forwardRef, type HTMLAttributes } from "react";
 import { cn2 } from "../utils";
-import { tokens } from "../theme";
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   shadow?: "sm" | "md" | "lg";

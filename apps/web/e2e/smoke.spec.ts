@@ -28,6 +28,43 @@ function stubApi(page: import("@playwright/test").Page) {
   });
 }
 
+const DIM_NAMES = [
+  "Technical Complexity",
+  "Maintainability",
+  "Testing Maturity",
+  "Documentation Quality",
+  "Evolution Health",
+  "Delivery Readiness",
+  "Scalability Readiness",
+  "Technical Debt Risk",
+];
+
+function stubMethodology(page: import("@playwright/test").Page) {
+  return page.route("**/api/methodology", async (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        model_version: "dna-core-1.0",
+        min_coverage_for_score: 0.35,
+        dimensions: DIM_NAMES.map((name, i) => ({
+          key: `dim_${i}`,
+          name,
+          direction: i === 7 ? "lower_is_better" : "higher_is_better",
+          description: `${name} description`,
+          indicators: [{ key: "example_indicator", weight: 1.0, direction: "higher_is_better" }],
+        })),
+        coverage_labels: [
+          { below: 0.35, label: "insufficient" },
+          { below: 0.6, label: "low" },
+          { below: 0.8, label: "moderate" },
+          { below: 1.01, label: "high" },
+        ],
+        caveats: ["Scores are descriptive evidence-weighted signals."],
+      },
+    }),
+  );
+}
+
 test("landing page renders hero and quick start", async ({ page }) => {
   await stubApi(page);
   await page.goto("/");
@@ -38,6 +75,7 @@ test("landing page renders hero and quick start", async ({ page }) => {
 
 test("methodology page renders the 8 dimensions", async ({ page }) => {
   await stubApi(page);
+  await stubMethodology(page);
   await page.goto("/methodology");
   await expect(page.getByRole("heading", { level: 1, name: "Methodology" })).toBeVisible();
   await expect(page.getByText("Technical Complexity")).toBeVisible();
@@ -47,6 +85,7 @@ test("methodology page renders the 8 dimensions", async ({ page }) => {
 
 test("navigation: sidebar links work", async ({ page }) => {
   await stubApi(page);
+  await stubMethodology(page);
   await page.goto("/");
   await page.getByRole("link", { name: "Methodology" }).click();
   await expect(page).toHaveURL(/\/methodology/);
