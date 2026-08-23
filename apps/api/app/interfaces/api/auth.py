@@ -32,7 +32,10 @@ _RATE_WINDOW_SECONDS = 60
 
 
 def _session_cookie(request: Request, token: str) -> Response:
-    secure = request.url.scheme == "https"
+    # Trust the TLS-terminating proxy's scheme header when present; behind a
+    # reverse proxy request.url.scheme is plain http even for HTTPS traffic.
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    secure = request.url.scheme == "https" or forwarded_proto.split(",")[0].strip() == "https"
     resp = Response(status_code=302, headers={"Location": settings.app_base_url})
     resp.set_cookie(
         key="session",
@@ -74,13 +77,26 @@ def github_start(request: Request):
         "state": state,
     }
     url = "https://github.com/login/oauth/authorize?" + urllib.parse.urlencode(params)
-    return RedirectResponse(url, status_code=302)
+    resp = RedirectResponse(url, status_code=302)
+    # Bind the state to this browser: the callback only accepts the flow whose
+    # cookie matches, so a state minted in another session cannot be replayed.
+    resp.set_cookie(
+        key="pdna_oauth_state",
+        value=state,
+        max_age=_STATE_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+        path="/",
+    )
+    return resp
 
 
 @router.get("/github/callback")
 async def github_callback(code: str, state: str, request: Request, db: Session = Depends(get_db)):
     if not state_consume(state, _STATE_TTL_SECONDS):
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
+    if request.cookies.get("pdna_oauth_state") != state:
+        raise HTTPException(status_code=400, detail="OAuth state does not match this browser")
     if not settings.github_client_id or not settings.github_client_secret:
         raise HTTPException(status_code=503, detail="GitHub OAuth is not configured")
 
@@ -126,7 +142,8 @@ async def github_callback(code: str, state: str, request: Request, db: Session =
         db.add(GitHubConnection(
             user_id=user.id,
             encrypted_token=encrypt_token(access_token),
-            scopes=token_data.get("scope", "").split(","),
+            # GitHub returns scopes as a space-separated list.
+            scopes=token_data.get("scope", "").split(),
         ))
     db.commit()
 
