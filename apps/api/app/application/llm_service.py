@@ -7,12 +7,15 @@ built from the available evidence — never used for scoring, only for UI displa
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from ..adapters.llm.base import LLMError
 from ..adapters.llm.prompts import PROMPT_VERSION, build_messages, validate_output
 from ..adapters.llm.router import LLMResult
 from ..config import settings
+
+logger = logging.getLogger("projectdna.llm")
 
 DEFAULT_MODEL = "openai/gpt-4o-mini"
 
@@ -90,11 +93,15 @@ class LLMService:
         dna_text: str,
         decisions_text: str,
         experiments_text: str,
+        db=None,
+        snapshot_id: str = "",
     ) -> dict[str, Any]:
         """Generate a grounded summary for a snapshot.
 
         Tries LLM providers with automatic failover. If all fail, returns
-        a deterministic template built from the evidence.
+        a deterministic template built from the evidence. Successful runs are
+        persisted to ``llm_runs`` when a session is provided; persistence
+        failures are logged but never discard the summary itself.
         """
         system_msg, user_msg = build_messages(
             project_name, snapshot_sha, timeline_text, dna_text, decisions_text, experiments_text
@@ -104,16 +111,18 @@ class LLMService:
             result = self.chat(system_msg, user_msg, timeout=settings.llm_timeout_seconds)
             parsed, status, reason = validate_output(result.text)
             if status == "ok":
-                _persist_llm_run(
-                    snapshot_id="",
-                    purpose="summary",
-                    provider=result.provider,
-                    model=result.model,
-                    system=system_msg,
-                    user=user_msg,
-                    output=parsed,
-                    status="ok",
-                )
+                if db is not None:
+                    self._persist_run(
+                        db,
+                        snapshot_id=snapshot_id,
+                        purpose="summary",
+                        provider=result.provider,
+                        model=result.model,
+                        system=system_msg,
+                        user=user_msg,
+                        output=parsed,
+                        status="ok",
+                    )
                 return {
                     "summary": parsed["summary"],
                     "claims": [{"text": h, "evidence_ids": []} for h in parsed["highlights"][:5]],
@@ -125,7 +134,7 @@ class LLMService:
                     "prompt_version": PROMPT_VERSION,
                 }
         except Exception:  # noqa: BLE001 - fail over to deterministic
-            pass
+            logger.warning("LLM summarization failed; using deterministic fallback", exc_info=True)
 
         # Deterministic fallback
         return {
@@ -148,30 +157,22 @@ class LLMService:
             lines.append("Timeline: " + timeline_text.strip())
         return " | ".join(lines) if lines else "No summary available."
 
+    @staticmethod
+    def _persist_run(db, snapshot_id: str, purpose: str, provider: str, model: str,
+                     system: str, user: str, output: dict, status: str) -> None:
+        """Persist an LLM run for auditability. Raises on failure."""
+        from ..models import LLMRun
 
-def _persist_llm_run(
-    db,
-    snapshot_id: str,
-    purpose: str,
-    provider: str,
-    model: str,
-    system: str,
-    user: str,
-    output: dict,
-    status: str,
-) -> None:
-    from ..models import LLMRun
-
-    input_ids = [line for line in user.splitlines() if line.startswith("- ")][:50]
-    run = LLMRun(
-        snapshot_id=snapshot_id,
-        purpose=purpose,
-        provider=provider,
-        model=model,
-        prompt_version=PROMPT_VERSION,
-        input_evidence_ids=input_ids,
-        output_json=output,
-        validation_status=status,
-    )
-    db.add(run)
-    db.commit()
+        input_ids = [line for line in user.splitlines() if line.startswith("- ")][:50]
+        run = LLMRun(
+            snapshot_id=snapshot_id,
+            purpose=purpose,
+            provider=provider,
+            model=model,
+            prompt_version=PROMPT_VERSION,
+            input_evidence_ids=input_ids,
+            output_json=output,
+            validation_status=status,
+        )
+        db.add(run)
+        db.commit()

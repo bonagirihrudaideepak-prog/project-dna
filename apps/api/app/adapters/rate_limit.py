@@ -27,6 +27,10 @@ def consume(key: str, limit: int, window_seconds: int) -> bool:
             n = c.incr(redis_key)
             if n == 1:
                 c.expire(redis_key, window_seconds)
+            elif n > limit and c.ttl(redis_key) < 0:
+                # Self-heal counters orphaned by a crash between INCR and
+                # EXPIRE: without a TTL they would block the key forever.
+                c.expire(redis_key, window_seconds)
             if n > limit:
                 metrics.rate_limited.inc()
                 return False

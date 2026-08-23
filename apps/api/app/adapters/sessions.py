@@ -69,7 +69,9 @@ def create(user_id: str) -> str:
 def resolve(sid: str) -> Optional[str]:
     """Return the user_id for *sid* if the session is still valid, else None.
 
-    The session is considered expired when its TTL has elapsed.
+    The session is considered expired when its TTL has elapsed. A valid
+    session stays valid across many requests; it is only removed by explicit
+    revocation or expiry.
     """
     c = _cache_client()
     if c is not None:
@@ -81,11 +83,12 @@ def resolve(sid: str) -> Optional[str]:
             pass
 
     # In-memory fallback
-    entry = _mem_sid_to_user.pop(sid, None)
+    entry = _mem_sid_to_user.get(sid)
     if entry is None:
         return None
     user_id, expiry_ts = entry
     if time.monotonic() > expiry_ts:
+        _mem_sid_to_user.pop(sid, None)
         _mem_user_to_sids.get(user_id, set()).discard(sid)
         return None
     return user_id

@@ -218,6 +218,8 @@ def _evaluate_and_store_alerts(snapshot: RepositorySnapshot) -> int:
     unique constraint means a re-run (worker retry, snapshot re-analysis) never
     double-fires. Returns the number of alerts created.
     """
+    from ..config.constants import COVERAGE_INSUFFICIENT
+
     db = SessionLocal()
     try:
         rules = (
@@ -228,38 +230,35 @@ def _evaluate_and_store_alerts(snapshot: RepositorySnapshot) -> int:
         if not rules:
             return 0
         scores = db.query(DNAScore).filter(DNAScore.snapshot_id == snapshot.id).all()
-        # Build per-dimension history: previous comparable score from earlier
-        # snapshots (oldest first, so the last non-null per dimension wins).
-        earlier = (
-            db.query(RepositorySnapshot)
-            .filter(RepositorySnapshot.project_id == snapshot.project_id)
+        # Build per-dimension history with ONE joined query over all earlier
+        # snapshots of the project (oldest first, so the last non-null per
+        # dimension wins) instead of one query per snapshot.
+        earlier_scores = (
+            db.query(DNAScore)
+            .join(RepositorySnapshot, DNAScore.snapshot_id == RepositorySnapshot.id)
+            .filter(
+                RepositorySnapshot.project_id == snapshot.project_id,
+                RepositorySnapshot.id != snapshot.id,
+            )
             .order_by(RepositorySnapshot.created_at.asc())
             .all()
         )
         history: dict[str, int] = {}
-        for s in earlier:
-            if s.id == snapshot.id:
-                continue
-            prior = {
-                sc.dimension: sc.score
-                for sc in db.query(DNAScore).filter(DNAScore.snapshot_id == s.id).all()
-                if sc.coverage >= 0.35 and sc.score is not None
-            }
-            for dim, val in prior.items():
-                history[dim] = val
+        for sc in earlier_scores:
+            if sc.coverage >= COVERAGE_INSUFFICIENT and sc.score is not None:
+                history[sc.dimension] = sc.score
         decisions = evaluate_scores(
             rules=[RuleSpec(id=str(r.id), dimension=r.dimension, operator=r.operator, threshold=r.threshold, enabled=r.enabled) for r in rules],
             scores=[ScoreSnapshot(dimension=s.dimension, score=s.score, coverage=s.coverage) for s in scores],
             history=history,
         )
+        # Idempotency check: batch-load already-fired rules for this snapshot.
+        existing_rule_ids = {
+            str(rule_id) for (rule_id,) in db.query(Alert.rule_id).filter(Alert.snapshot_id == snapshot.id).all()
+        }
         created = 0
         for d in decisions:
-            existing = (
-                db.query(Alert)
-                .filter(Alert.rule_id == d.rule_id, Alert.snapshot_id == snapshot.id)
-                .first()
-            )
-            if existing:
+            if d.rule_id in existing_rule_ids:
                 continue
             db.add(
                 Alert(
@@ -284,23 +283,25 @@ def worker_once() -> int:
         return 0
     job_id = str(job.id)
     project_id: str | None = None
-    db = SessionLocal()
     try:
-        snap = db.get(RepositorySnapshot, job.snapshot_id)
-        if snap:
-            project_id = str(snap.project_id)
-        _run_job(job)
-        metrics.jobs_completed.inc()
-        if project_id:
+        db = SessionLocal()
+        try:
             snap = db.get(RepositorySnapshot, job.snapshot_id)
             if snap:
-                alerts_created = _evaluate_and_store_alerts(snap)
-                if alerts_created:
-                    print(f"[worker] {alerts_created} alert(s) fired for {job_id}", flush=True)
-            _cache_service.invalidate_project(project_id)
-        print(f"[worker] completed {job_id}", flush=True)
-        db.close()
-        return 1
+                project_id = str(snap.project_id)
+            _run_job(job)
+            metrics.jobs_completed.inc()
+            if project_id:
+                snap = db.get(RepositorySnapshot, job.snapshot_id)
+                if snap:
+                    alerts_created = _evaluate_and_store_alerts(snap)
+                    if alerts_created:
+                        print(f"[worker] {alerts_created} alert(s) fired for {job_id}", flush=True)
+                _cache_service.invalidate_project(project_id)
+            print(f"[worker] completed {job_id}", flush=True)
+            return 1
+        finally:
+            db.close()
     except Exception as exc:  # noqa: BLE001
         metrics.jobs_failed.inc()
         db = SessionLocal()

@@ -47,9 +47,15 @@ def _session_cookie(request: Request, token: str) -> Response:
 
 
 def _client_ip(request: Request) -> str:
+    """Best-effort client IP for rate limiting.
+
+    X-Forwarded-For is client-controllable: the FIRST entry can be spoofed by
+    an attacker to rotate the limiter key. The LAST entry is appended by the
+    trusted reverse proxy closest to the app, so prefer it when present.
+    """
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        return forwarded.split(",")[-1].strip()
     return request.client.host if request.client else "unknown"
 
 

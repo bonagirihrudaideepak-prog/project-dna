@@ -8,7 +8,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import text
@@ -61,9 +61,13 @@ async def request_context(request: Request, call_next):
     response = await call_next(request)
     duration_ms = round((time.monotonic() - start) * 1000, 1)
     response.headers["X-Request-ID"] = request.state.request_id
-    labels = {"method": request.method, "path": request.url.path, "status": str(response.status_code)}
+    # Label by route template (e.g. /api/v1/projects/{project_id}), never the
+    # raw path: raw paths embed UUIDs and would grow metric labels unboundedly.
+    route = request.scope.get("route")
+    path_label = getattr(route, "path", None) or "unmatched"
+    labels = {"method": request.method, "path": path_label, "status": str(response.status_code)}
     metrics.http_requests.inc(labels)
-    metrics.http_duration.observe(duration_ms / 1000.0, {"method": request.method, "path": request.url.path})
+    metrics.http_duration.observe(duration_ms / 1000.0, {"method": request.method, "path": path_label})
     log_with_context(
         logger,
         logging.INFO,
@@ -120,9 +124,37 @@ async def dna_error_handler(request: Request, exc: DNAError):
         level="error",
         metadata={"path": request.url.path, "method": request.method, "retryable": exc.retryable},
     )
-    status = 500 if exc.retryable else 400
-    code = exc.code
-    return _error_response(status, code, exc.message, retryable=exc.retryable)
+    return _error_response(exc.status_code, exc.code, exc.message, retryable=exc.retryable)
+
+
+_HTTP_ERROR_CODES = {
+    400: "BAD_REQUEST",
+    401: "UNAUTHORIZED",
+    403: "FORBIDDEN",
+    404: "NOT_FOUND",
+    409: "CONFLICT",
+    422: "VALIDATION_ERROR",
+    429: "RATE_LIMITED",
+    503: "SERVICE_UNAVAILABLE",
+}
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Route HTTPException through the standard error envelope so every API
+    error shares the ``{"error": {code, message, retryable}}`` contract."""
+    log_with_context(
+        logger, logging.INFO, "http_error",
+        request_id=getattr(request.state, "request_id", None),
+        status=exc.status_code,
+        error=str(exc.detail)[:500],
+    )
+    code = _HTTP_ERROR_CODES.get(exc.status_code, f"HTTP_{exc.status_code}")
+    response = _error_response(exc.status_code, code, str(exc.detail), retryable=exc.status_code >= 500 or exc.status_code == 429)
+    if exc.headers:
+        for key, value in exc.headers.items():
+            response.headers[key] = value
+    return response
 
 
 @app.exception_handler(RateLimitedError)

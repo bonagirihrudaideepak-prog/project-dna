@@ -35,10 +35,12 @@ def _require_db(db_available):
 def project_with_rules(db_available):
     _require_db(db_available)
     db = SessionLocal()
-    user = User(github_user_id=999001, login="alert-test-user")
+    user = db.query(User).filter_by(github_user_id=999001).first()
+    if not user:
+        user = User(github_user_id=999001, login="alert-test-user")
+        db.add(user)
+        db.flush()
     project = Project(full_name="alert-test/org", owner="alert-test", name="org", is_fixture=False)
-    db.add(user)
-    db.flush()
     db.add(project)
     db.flush()
     rule = AlertRule(

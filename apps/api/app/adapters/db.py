@@ -17,5 +17,12 @@ def get_db():
 
 
 def init_db() -> None:
-    """Create tables if they don't exist (safe for dev; production uses Alembic migrations)."""
+    """Create tables if they don't exist (safe for dev; production uses Alembic migrations).
+
+    Importing the model package is required: ``Base.metadata`` only knows about
+    modules that have been imported. Without this, a standalone call (scripts,
+    tests, CI) would silently create an empty subset of tables.
+    """
+    from .. import models  # noqa: F401 - registers all ORM classes on Base.metadata
+
     Base.metadata.create_all(bind=engine, checkfirst=True)

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ...adapters.cache_service import CacheService
 from ...adapters.db import get_db
 from ...config import settings
+from ...config.constants import DIMENSION_ORDER
 from ...models import DNAScore, MetricValue, RepositorySnapshot, TimelineEvent
 from ..deps import current_user, optional_user, parse_id
 from ..schemas import EventPatchIn
@@ -17,6 +18,10 @@ router = APIRouter(tags=["dna"])
 
 # Module-level cache service instance
 _cache_service = CacheService()
+
+# Position of each dimension in the canonical ADR-001 ordering; unknown
+# dimensions sort after all known ones.
+_DIMENSION_RANK = {key: i for i, key in enumerate(DIMENSION_ORDER)}
 
 
 def _get_snapshot(db: Session, snapshot_id: str, user_id: str | None = None) -> RepositorySnapshot:
@@ -46,7 +51,7 @@ def get_dna(snapshot_id: str, user_id: str | None = Depends(optional_user), db: 
             "model_version": s.model_version,
             "explanation": s.explanation_json,
         }
-        for s in sorted(scores, key=lambda s: s.dimension)
+        for s in sorted(scores, key=lambda s: (_DIMENSION_RANK.get(s.dimension, len(_DIMENSION_RANK)), s.dimension))
     ]
     _cache_service.set(cache_key, payload, ttl=settings.cache_dna_ttl)
     return payload

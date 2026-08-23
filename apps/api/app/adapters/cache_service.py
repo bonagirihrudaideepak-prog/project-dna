@@ -2,41 +2,45 @@
 
 Provides a single point for cache operations across the application, ensuring
 consistent key naming, metric tracking, and invalidation strategies.
+
+All operations degrade gracefully when Redis is unavailable: reads return None,
+writes/invalidations are no-ops. The underlying adapter reconnects on a short
+backoff, so recovery from a Redis outage requires no restart.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
-from redis import Redis
-
 from ..config import settings
+from . import metrics
 from .cache import client as _cache_client
 
 logger = logging.getLogger("projectdna.cache_service")
+
+# Key namespaces invalidated together when a project mutates.
+_PROJECT_LIST_PREFIX = "projects:list:"
 
 
 class CacheService:
     """Service-layer cache wrapper providing consistent access patterns."""
 
     def __init__(self):
-        self._redis: Redis | None = None
-        self._initialized: bool = False
+        self._redis = None
 
-    def _ensure_redis(self) -> Redis | None:
-        """Lazily initialize Redis client, matching the adapter pattern."""
-        if self._initialized:
-            return self._redis
-        self._redis = _cache_client()
-        self._initialized = True
+    def _ensure_redis(self):
+        """Return the Redis client or None. Retries until the adapter succeeds;
+        the adapter itself applies connect backoff so this is cheap when down."""
+        if self._redis is None:
+            self._redis = _cache_client()
         return self._redis
 
     # ── Cache-aside helpers ────────────────────────────────────────────
 
     def get(self, key: str) -> Any | None:
         """Retrieve a value from cache. Returns None if miss or Redis down."""
-        metrics = __import__("projectdna.adapters.metrics", fromlist=["metrics"])
         c = self._ensure_redis()
         if c is None:
             metrics.cache_misses.inc()
@@ -47,7 +51,7 @@ class CacheService:
                 metrics.cache_misses.inc()
                 return None
             metrics.cache_hits.inc()
-            return __import__("json", fromlist=["json"]).loads(raw)
+            return json.loads(raw)
         except Exception:  # noqa: BLE001
             metrics.cache_misses.inc()
             return None
@@ -58,8 +62,7 @@ class CacheService:
         if c is None:
             return
         try:
-            c.set(key, __import__("json", fromlist=["json"]).dumps(value, default=str),
-                  ex=ttl or settings.cache_default_ttl)
+            c.set(key, json.dumps(value, default=str), ex=ttl or settings.cache_default_ttl)
         except Exception:  # noqa: BLE001
             pass
 
@@ -91,15 +94,14 @@ class CacheService:
         """Drop every cache key that could be stale after a project mutation."""
         c = self._ensure_redis()
         if c is None:
-            # Still attempt in-memory cleanup patterns if needed
             logger.warning("Redis unavailable during project cache invalidation")
             return
         try:
-            pipe = c.pipeline()
+            pipe = c.pipeline(transaction=False)
             pipe.delete(f"projects:item:{project_id}")
             pipe.delete(f"snapshots:list:{project_id}")
-            pipe.delete_prefix("projects:list:")
             pipe.execute()
+            self.delete_prefix(_PROJECT_LIST_PREFIX)
             logger.info("cache invalidated for project %s", project_id)
         except Exception:  # noqa: BLE001
             logger.warning("cache invalidation failed for project %s", project_id)
@@ -113,7 +115,7 @@ class CacheService:
             logger.warning("Redis unavailable during snapshot cache invalidation")
             return
         try:
-            pipe = c.pipeline()
+            pipe = c.pipeline(transaction=False)
             pipe.delete(f"dna:{snapshot_id}")
             pipe.delete(f"timeline:{snapshot_id}")
             pipe.execute()
@@ -125,23 +127,19 @@ class CacheService:
 
     def get_or_compute(self, key: str, compute_fn, ttl: int | None = None) -> Any:
         """Cache-aside pattern with metrics: return cached if available, else compute."""
-        metrics = __import__("projectdna.adapters.metrics", fromlist=["metrics"])
         c = self._ensure_redis()
         if c is None:
-            # No cache available — compute and return directly
-            result = compute_fn()
-            return result
+            return compute_fn()
 
         try:
             raw = c.get(key)
             if raw is not None:
                 metrics.cache_hits.inc()
-                return __import__("json", fromlist=["json"]).loads(raw)
+                return json.loads(raw)
 
             metrics.cache_misses.inc()
             result = compute_fn()
-            c.set(key, __import__("json", fromlist=["json"]).dumps(result, default=str),
-                  ex=ttl or settings.cache_default_ttl)
+            c.set(key, json.dumps(result, default=str), ex=ttl or settings.cache_default_ttl)
             return result
         except Exception:  # noqa: BLE001
             metrics.cache_misses.inc()

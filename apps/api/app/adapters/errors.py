@@ -20,12 +20,22 @@ logger = logging.getLogger("projectdna.errors")
 
 
 class DNAError(Exception):
-    """Base class for all Project DNA application errors."""
+    """Base class for all Project DNA application errors.
 
-    def __init__(self, message: str, code: str = "DNA_ERROR", retryable: bool = False):
+    ``status_code`` lets the FastAPI layer translate domain failures into the
+    right HTTP status without importing HTTP concerns here."""
+
+    def __init__(
+        self,
+        message: str,
+        code: str = "DNA_ERROR",
+        retryable: bool = False,
+        status_code: int = 400,
+    ):
         self.message = message
         self.code = code
         self.retryable = retryable
+        self.status_code = status_code
         super().__init__(message)
 
 
@@ -33,21 +43,35 @@ class NotFoundError(DNAError):
     """Resource not found (HTTP 404)."""
 
     def __init__(self, message: str = "Resource not found"):
-        super().__init__(message=message, code="NOT_FOUND", retryable=False)
+        super().__init__(message=message, code="NOT_FOUND", retryable=False, status_code=404)
 
 
 class ValidationError(DNAError):
     """Input validation failure (HTTP 422)."""
 
     def __init__(self, message: str = "Validation error", code: str = "VALIDATION_ERROR"):
-        super().__init__(message=message, code=code, retryable=False)
+        super().__init__(message=message, code=code, retryable=False, status_code=422)
+
+
+class ConflictError(DNAError):
+    """State conflict, e.g. duplicate resource (HTTP 409)."""
+
+    def __init__(self, message: str = "Resource already exists"):
+        super().__init__(message=message, code="CONFLICT", retryable=False, status_code=409)
+
+
+class PermissionDeniedError(DNAError):
+    """Authenticated but not allowed (HTTP 403)."""
+
+    def __init__(self, message: str = "Not allowed"):
+        super().__init__(message=message, code="FORBIDDEN", retryable=False, status_code=403)
 
 
 class AuthError(DNAError):
-    """Authentication/authorization failure (HTTP 401/403)."""
+    """Authentication/authorization failure (HTTP 401)."""
 
     def __init__(self, message: str = "Not authenticated", code: str = "UNAUTHORIZED"):
-        super().__init__(message=message, code=code, retryable=False)
+        super().__init__(message=message, code=code, retryable=False, status_code=401)
 
 
 class RateLimitedError(DNAError):

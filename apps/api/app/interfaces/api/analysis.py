@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from ...adapters.db import get_db
-from ...adapters.llm.prompts import PROMPT_VERSION
 from ...application.exports import to_json, to_print_html
 from ...application.llm_service import LLMService
 from ...application.similarity import model_compatible, weighted_distance
@@ -68,8 +67,10 @@ def compare(body: CompareIn, user_id: str | None = Depends(optional_user), db: S
 def get_graph(snapshot_id: str, focus: str | None = None, depth: int = 1, user_id: str | None = Depends(optional_user), db: Session = Depends(get_db)):
     s = _snapshot(db, snapshot_id, user_id)
     nodes = db.query(GraphNode).filter(GraphNode.snapshot_id == s.id).all()
+    # Eager-load endpoints: avoids 2 lazy SELECTs per edge during serialization.
     edges = (
         db.query(GraphEdge)
+        .options(selectinload(GraphEdge.source), selectinload(GraphEdge.target))
         .filter(GraphEdge.project_id == s.project_id)
         .filter(GraphEdge.id.in_(
             db.query(GraphEdge.id).join(GraphNode, GraphEdge.source_node_id == GraphNode.id)
@@ -173,33 +174,10 @@ def create_summary(snapshot_id: str, body: SummaryIn, user_id: str = Depends(cur
         dna_text,
         decisions_text,
         experiments_text,
+        db=db,
+        snapshot_id=str(s.id),
     )
     return summary
-
-
-def _persist_llm_run(
-    db: Session,
-    snapshot_id: str,
-    purpose: str,
-    provider: str,
-    model: str,
-    system: str,
-    user: str,
-    output: dict,
-    status: str,
-) -> None:
-    run = LLMRun(
-        snapshot_id=snapshot_id,
-        purpose=purpose,
-        provider=provider,
-        model=model,
-        prompt_version=PROMPT_VERSION,
-        input_evidence_ids=[line for line in user.splitlines() if line.startswith("- ")][:50],
-        output_json=output,
-        validation_status=status,
-    )
-    db.add(run)
-    db.commit()
 
 
 @router.get("/summaries/{summary_id}")

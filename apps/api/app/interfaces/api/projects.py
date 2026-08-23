@@ -1,49 +1,52 @@
-"""Projects, repositories, snapshots, and analysis jobs."""
+"""Projects, repositories, snapshots, and analysis jobs.
+
+Thin HTTP layer: request parsing, auth dependency wiring, response models.
+Business rules live in ``application/project_service``; errors raised there
+are rendered by the global DNAError handler as the standard error envelope.
+"""
 
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from ...adapters.cache_service import CacheService
 from ...adapters.db import get_db
+from ...adapters.errors import NotFoundError
 from ...adapters.github import GitHubAdapter
-from ...config import settings
-from ...models import (
-    AnalysisJob,
-    Project,
-    ProjectMembership,
-    RepositorySnapshot,
+from ...application.project_service import (
+    cache as _cache_service,
 )
+from ...application.project_service import (
+    delete_project as delete_project_usecase,
+)
+from ...application.project_service import (
+    import_project as import_project_usecase,
+)
+from ...application.project_service import (
+    queue_analysis as queue_analysis_usecase,
+)
+from ...application.project_service import (
+    resolve_project,
+)
+from ...config import settings
+from ...models import AnalysisJob, Project, ProjectMembership, RepositorySnapshot
 from ..deps import current_user, optional_user, parse_id
 from ..schemas import AnalysisJobOut, GitHubRepoOut, ImportProjectIn, ProjectOut, SnapshotOut
 
 router = APIRouter(tags=["projects"])
 
-# Module-level cache service instance (created on first use)
-_cache_service: CacheService | None = None
 
+def require_membership(db: Session, project_id: str | uuid.UUID, user_id: str | None) -> Project:
+    """Shared authorization resolver used by every project-scoped router.
 
-def _get_cache_service() -> CacheService:
-    global _cache_service
-    if _cache_service is None:
-        _cache_service = CacheService()
-    return _cache_service
-
-
-def require_membership(db: Session, project_id: str, user_id: str | None) -> Project:
-    project = db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    if user_id and not db.query(ProjectMembership).filter_by(project_id=project.id, user_id=user_id).first():
-        # fixture demo projects are world-readable in dev
-        if project.is_fixture and settings.env == "development":
-            return project
-        raise HTTPException(status_code=403, detail="Not a member of this project")
-    return project
+    Accepts a UUID instance as well as a string: internal callers pass ORM
+    attributes (e.g. ``snapshot.project_id``) directly."""
+    pid = str(project_id) if isinstance(project_id, uuid.UUID) else parse_id(project_id, "project_id")
+    return resolve_project(db, pid, user_id)
 
 
 def _snapshot_out(s: RepositorySnapshot) -> SnapshotOut:
@@ -60,15 +63,46 @@ def _snapshot_out(s: RepositorySnapshot) -> SnapshotOut:
     )
 
 
+def _project_out(project: Project, db: Session) -> ProjectOut:
+    latest = (
+        db.query(RepositorySnapshot)
+        .filter(RepositorySnapshot.project_id == project.id)
+        .order_by(RepositorySnapshot.created_at.desc())
+        .first()
+    )
+    return ProjectOut(
+        id=str(project.id),
+        full_name=project.full_name,
+        owner=project.owner,
+        name=project.name,
+        visibility=project.visibility,
+        default_branch=project.default_branch,
+        description=project.description,
+        is_fixture=project.is_fixture,
+        latest_snapshot=_snapshot_out(latest).model_dump() if latest else None,
+    )
+
+
+def _get_cache_service():
+    return _cache_service
+
+
 @router.get("/github/repositories", response_model=list[GitHubRepoOut])
 async def list_repositories(
     q: str = "",
     page: int = 1,
     per_page: int = 30,
+    user_id: str | None = Depends(optional_user),
     db: Session = Depends(get_db),
 ):
     """List accessible repositories. When no OAuth token is configured, list
-    seeded fixture repositories for offline development."""
+    seeded fixture repositories for offline development.
+
+    Authenticated in production: this route proxies through the server-level
+    GitHub token, so anonymous access would leak token-scoped listings and burn
+    the server's rate limit. Fixture fallback stays world-readable in dev."""
+    if settings.env == "production" and not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     token = settings.github_token
     if token:
         adapter = GitHubAdapter(token=token)
@@ -100,7 +134,7 @@ async def list_repositories(
                 try:
                     data = json.loads(manifest.read_text())
                     out.append(GitHubRepoOut(**data))
-                except Exception:
+                except Exception:  # noqa: BLE001 - unreadable manifests are skipped
                     continue
     if not out:
         raise HTTPException(status_code=503, detail="No GitHub token and no fixtures available")
@@ -108,68 +142,14 @@ async def list_repositories(
 
 
 @router.post("/projects/import", response_model=ProjectOut)
-async def import_project(body: ImportProjectIn, user_id: str = Depends(current_user), db: Session = Depends(get_db)):
+def import_project(
+    body: ImportProjectIn,
+    user_id: str = Depends(current_user),
+    db: Session = Depends(get_db),
+):
     full_name = body.full_name.strip().lstrip("/")
-    parts = full_name.split("/")
-    if len(parts) != 2:
-        raise HTTPException(status_code=400, detail="Expected owner/repo")
-
-    existing = db.query(Project).filter(Project.full_name == full_name).first()
-    if existing:
-        if not db.query(ProjectMembership).filter_by(project_id=existing.id, user_id=user_id).first():
-            db.add(ProjectMembership(project_id=existing.id, user_id=user_id, role="member"))
-            db.commit()
-        _get_cache_service().invalidate_project(existing.id)
-        return _project_out(existing, db)
-
-    project = Project(
-        full_name=full_name,
-        owner=parts[0],
-        name=parts[1],
-        default_branch=body.branch or "main",
-        visibility="public",
-        is_fixture=_is_fixture(full_name),
-    )
-    db.add(project)
-    db.flush()
-    db.add(ProjectMembership(project_id=project.id, user_id=user_id, role="owner"))
-    db.commit()
-    _get_cache_service().invalidate_project(project.id)
+    project = import_project_usecase(db, user_id, full_name, body.branch)
     return _project_out(project, db)
-
-
-def _is_fixture(full_name: str) -> bool:
-    fixture_root = Path(settings.fixture_root)
-    if not fixture_root.exists():
-        return False
-    for d in fixture_root.iterdir():
-        if (d / "manifest.json").exists():
-            try:
-                if json.loads((d / "manifest.json").read_text()).get("full_name") == full_name:
-                    return True
-            except Exception:
-                continue
-    return False
-
-
-def _project_out(project: Project, db: Session) -> ProjectOut:
-    latest = (
-        db.query(RepositorySnapshot)
-        .filter(RepositorySnapshot.project_id == project.id)
-        .order_by(RepositorySnapshot.created_at.desc())
-        .first()
-    )
-    return ProjectOut(
-        id=str(project.id),
-        full_name=project.full_name,
-        owner=project.owner,
-        name=project.name,
-        visibility=project.visibility,
-        default_branch=project.default_branch,
-        description=project.description,
-        is_fixture=project.is_fixture,
-        latest_snapshot=_snapshot_out(latest).model_dump() if latest else None,
-    )
 
 
 @router.get("/projects", response_model=list[ProjectOut])
@@ -179,6 +159,8 @@ def list_projects(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100),
 ):
+    from sqlalchemy import func, tuple_
+
     query = db.query(Project).order_by(Project.created_at.desc())
     if user_id:
         member_ids = [m.project_id for m in db.query(ProjectMembership).filter(ProjectMembership.user_id == user_id).all()]
@@ -192,15 +174,14 @@ def list_projects(
         # Production: unauthenticated access is already rejected by optional_user.
         query = query.filter(False)
     cache_key = f"projects:list:{user_id or 'anon'}:{page}:{per_page}"
-    cached = _get_cache_service().get(cache_key)
+    cached = _cache_service.get(cache_key)
     if cached is not None:
         return cached
     projects_paged = query.offset((page - 1) * per_page).limit(per_page).all()
-    # Batch-load the latest snapshot per project to avoid N+1 queries.
+    # Batch-load the latest snapshot per project in ONE extra query to avoid N+1.
+    snapshots: dict = {}
     if projects_paged:
-        from sqlalchemy import func
-
-        latest = (
+        latest_pairs = (
             db.query(
                 RepositorySnapshot.project_id,
                 func.max(RepositorySnapshot.created_at).label("latest_created"),
@@ -209,19 +190,18 @@ def list_projects(
             .group_by(RepositorySnapshot.project_id)
             .all()
         )
-        latest_by_project = {pid: created for pid, created in latest}
-        snapshots = {}
-        for pid, created in latest_by_project.items():
-            snap = (
+        if latest_pairs:
+            rows = (
                 db.query(RepositorySnapshot)
-                .filter(RepositorySnapshot.project_id == pid, RepositorySnapshot.created_at == created)
+                .filter(
+                    tuple_(RepositorySnapshot.project_id, RepositorySnapshot.created_at).in_(latest_pairs)
+                )
                 .order_by(RepositorySnapshot.created_at.desc())
-                .first()
+                .all()
             )
-            if snap:
-                snapshots[pid] = snap
-    else:
-        snapshots = {}
+            for snap in rows:
+                # Ties on created_at resolve to the most recently loaded row.
+                snapshots[snap.project_id] = snap
     payload = [
         ProjectOut(
             id=str(p.id),
@@ -236,7 +216,7 @@ def list_projects(
         ).model_dump(mode="json")
         for p in projects_paged
     ]
-    _get_cache_service().set(cache_key, payload, ttl=settings.cache_list_ttl)
+    _cache_service.set(cache_key, payload, ttl=settings.cache_list_ttl)
     return payload
 
 
@@ -257,9 +237,7 @@ def get_project(project_id: str, user_id: str | None = Depends(optional_user), d
 def delete_project(project_id: str, user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     pid = parse_id(project_id, "project_id")
     project = require_membership(db, pid, user_id)
-    db.delete(project)
-    db.commit()
-    _get_cache_service().invalidate_project(pid)
+    delete_project_usecase(db, project, user_id)
     return {"ok": True}
 
 
@@ -267,27 +245,10 @@ def delete_project(project_id: str, user_id: str = Depends(current_user), db: Se
 def queue_analysis(project_id: str, user_id: str = Depends(current_user), db: Session = Depends(get_db)):
     pid = parse_id(project_id, "project_id")
     project = require_membership(db, pid, user_id)
-    snapshot = RepositorySnapshot(
-        project_id=project.id,
-        commit_sha="",
-        analyzer_version="dna-analyzer-1.0",
-        score_model_version="dna-core-1.0",
-        status="PENDING",
-        limits_json={
-            "max_files": settings.analysis_max_files,
-            "max_commits": settings.analysis_max_commits,
-            "max_bytes": settings.analysis_max_bytes,
-        },
-    )
-    db.add(snapshot)
-    db.flush()
-    job = AnalysisJob(snapshot_id=snapshot.id, state="QUEUED")
-    db.add(job)
-    db.commit()
-    _get_cache_service().invalidate_project(pid)
+    job = queue_analysis_usecase(db, project)
     return AnalysisJobOut(
         id=str(job.id),
-        snapshot_id=str(snapshot.id),
+        snapshot_id=str(job.snapshot_id),
         state="QUEUED",
         progress=0,
         phase="queued",
@@ -352,7 +313,8 @@ def list_snapshots(project_id: str, user_id: str | None = Depends(optional_user)
 def get_snapshot(snapshot_id: str, user_id: str | None = Depends(optional_user), db: Session = Depends(get_db)):
     snap = db.get(RepositorySnapshot, parse_id(snapshot_id, "snapshot_id"))
     if not snap:
-        raise HTTPException(status_code=404, detail="Snapshot not found")
+        raise NotFoundError("Snapshot not found")
+    require_membership(db, snap.project_id, user_id)
     return _snapshot_out(snap)
 
 

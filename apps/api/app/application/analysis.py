@@ -119,6 +119,7 @@ def run_snapshot_analysis(db: Session, snapshot_id: str, source: Any, heartbeat:
 
         # --- persist extracted data
         progress("EXTRACTING", "artifacts", 25)
+        _purge_partial_results(db, snapshot)
         _persist_artifacts(db, snapshot.id, artifacts)
         _persist_files(db, snapshot.id, inspection)
         _persist_file_changes(db, snapshot.id, file_changes)
@@ -175,6 +176,25 @@ def _extract_source(source: Any, full_name: str, branch: str):
         artifacts = asyncio_sync(source.artifacts, full_name, branch, settings.analysis_max_commits)
         inspection, file_changes = _github_inspect(source, full_name, sha, branch)
     return sha, artifacts, inspection, file_changes, list(inspection.warnings)
+
+
+def _purge_partial_results(db: Session, snapshot: RepositorySnapshot) -> None:
+    """Delete any rows left by a previous failed attempt for this snapshot.
+
+    The pipeline commits per phase, so a worker RETRY would otherwise append a
+    second copy of every artifact/file/score. Purging first makes re-runs
+    idempotent; unique indexes (migration 0005) back this up as a last resort.
+    Child rows cascade (score_evidence, event_artifacts, graph_edges).
+    """
+    sid = snapshot.id
+    db.query(DNAScore).filter(DNAScore.snapshot_id == sid).delete(synchronize_session=False)
+    db.query(MetricValue).filter(MetricValue.snapshot_id == sid).delete(synchronize_session=False)
+    db.query(TimelineEvent).filter(TimelineEvent.snapshot_id == sid).delete(synchronize_session=False)
+    db.query(GraphNode).filter(GraphNode.snapshot_id == sid).delete(synchronize_session=False)
+    db.query(FileChange).filter(FileChange.snapshot_id == sid).delete(synchronize_session=False)
+    db.query(FileRecord).filter(FileRecord.snapshot_id == sid).delete(synchronize_session=False)
+    db.query(Artifact).filter(Artifact.snapshot_id == sid).delete(synchronize_session=False)
+    db.commit()
 
 
 def _persist_artifacts(db: Session, snapshot_id: str, artifacts: list[dict]):
