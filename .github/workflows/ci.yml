@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   api:
@@ -13,6 +13,24 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: projectdna
+          POSTGRES_PASSWORD: projectdna
+          POSTGRES_DB: projectdna
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U projectdna"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://projectdna:projectdna@localhost:5434/projectdna
+      SECRET_KEY: ci-secret-not-used-in-production
+      ENV: test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,6 +42,8 @@ jobs:
           python -m pip install -e ".[dev]"
       - name: Lint
         run: python -m ruff check .
+      - name: Create database schema
+        run: python -c "from app.adapters.db import init_db; init_db()"
       - name: Test
         run: python -m pytest tests/ -q
 
