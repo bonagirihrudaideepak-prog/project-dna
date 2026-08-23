@@ -8,15 +8,28 @@
 :root {
   --lavender-primary: #6B46C1;
   --lavender-soft: #EDE9F2;
+  --lavender-preview: #B794F4;
   --pink-soft: #F87171;
   --white: #FFFFFF;
   --slate-50: #F8FAFC;
   --slate-100: #F1F5F9;
+  --slate-400: #94A3B8;
+  --slate-500: #64748B;
   --slate-600: #475569;
   --slate-700: #1E293B;
   --success: #10B981;
+  --success-rgb: 16, 185, 129;
   --warning: #F59E0B;
+  --warning-rgb: 245, 158, 11;
   --error: #EF4444;
+  --error-rgb: 239, 68, 68;
+
+  /* Chart / status colors used by lib/format.ts */
+  --green: var(--success);
+  --yellow: var(--warning);
+  --red: var(--error);
+  --teal: #14B8A6;
+  --purple: #8B5CF6;
 
   /* Text / background aliases used by pages */
   --text: #1E293B;
@@ -27,6 +40,7 @@
   --border-light: #E5E7EB;
   --bg-hover: #F1F5F9;
   --bg-muted: #F8FAFC;
+  --pageBg: #FAFAFC;
 
   /* Spacing scale (1 unit = 4px) */
   --spacing-0: 0;
@@ -338,19 +352,16 @@ button {
 .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
-@media (min-width: var(--breakpoint-sm)) {
-  .md\:grid-cols-2, .md\:grid-cols-3, .md\:grid-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .md\:p-8 { padding: var(--spacing-8); }
-}
-
-@media (min-width: var(--breakpoint-md)) {
+/* NOTE: CSS custom properties are not allowed in media-query conditions, so
+   breakpoints are written as literals here (they mirror the tokens above). */
+@media (min-width: 768px) {
   .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .md\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .md\:p-8 { padding: var(--spacing-8); }
 }
 
-@media (min-width: var(--breakpoint-lg)) {
+@media (min-width: 1024px) {
   .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }

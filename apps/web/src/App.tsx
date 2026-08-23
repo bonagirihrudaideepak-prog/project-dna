@@ -4,9 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "./lib/api";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoadingState } from "./components/StateViews";
-import { useDNA } from "./hooks/useDNA";
-import { useComparison } from "./hooks/useComparison";
-import { useTimeline } from "./hooks/useTimeline";
 import { useProjects } from "./hooks/useProjects";
 
 const HomePage = lazy(() => import("./pages/HomePage").then((m) => ({ default: m.HomePage })));
@@ -66,7 +63,7 @@ export default function App() {
           <Suspense fallback={<LoadingState />}>
             <Routes>
               <Route path="/" element={<HomePage />} />
-              <Route path="/projects" element={<ProjectsPage projects={projects} />} />
+              <Route path="/projects" element={<ProjectsPage projects={projects} loading={projectsLoading} />} />
               <Route path="/projects/:id" element={<ProjectDetailPage />} />
               <Route path="/projects/:id/dna" element={<DNAPage />} />
               <Route path="/projects/:id/timeline" element={<TimelinePage />} />

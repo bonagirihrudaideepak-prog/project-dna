@@ -1,19 +1,6 @@
-import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { Button, Card } from "../lib/components";
-import { api } from "../lib/api";
-import type { Project } from "../lib/types";
 
 export const HomePage = () => {
-  const { data: projects, isLoading, isError, error, refetch } = useQuery<Project[]>({
-    queryKey: ["projects"],
-    queryFn: api.projects,
-  });
-
-  if (isLoading) return <p className="text-lavenderPrimary">Loading...</p>;
-  if (isError) return <p className="text-error">Error loading projects. Try again.</p>;
-
-  const list = projects ?? [];
 
   // Three quick-start repo cards per design spec
   const quickStartCards = [

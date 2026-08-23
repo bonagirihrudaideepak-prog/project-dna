@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   CartesianGrid,
@@ -10,8 +10,13 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { api } from "../lib/api";
-import { useAlertRules, useAlerts, useAcknowledgeAlert, useDeleteAlertRule } from "../hooks/useAlerts";
+import {
+  useAlertRules,
+  useAlerts,
+  useAcknowledgeAlert,
+  useCreateAlertRule,
+  useDeleteAlertRule,
+} from "../hooks/useAlerts";
 import { useTrends } from "../hooks/useTrends";
 import { ErrorState, LoadingState } from "../components/StateViews";
 import type { TrendPoint } from "../lib/types";
@@ -45,12 +50,11 @@ export const TrendsPage = () => {
   const { data: alerts } = useAlerts();
   const acknowledge = useAcknowledgeAlert();
   const deleteRule = useDeleteAlertRule(projectId ?? "");
+  const createRule = useCreateAlertRule(projectId);
 
   const [dimension, setDimension] = useState(DIMENSIONS[0]);
   const [operator, setOperator] = useState<"lt" | "gt">("lt");
   const [threshold, setThreshold] = useState(50);
-  const [creating, setCreating] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
 
   const chartData = useMemo(() => {
     const pts = trends ?? [];
@@ -72,17 +76,11 @@ export const TrendsPage = () => {
     (rules ?? []).some((r) => r.id === a.rule_id),
   );
 
-  const handleCreate = async () => {
-    if (!projectId) return;
-    setFormError(null);
-    setCreating(true);
-    try {
-      await api.createAlertRule(projectId, { dimension, operator, threshold });
-      setCreating(false);
-    } catch (err) {
-      setFormError((err as Error).message);
-      setCreating(false);
-    }
+  const formError = createRule.isError ? (createRule.error as Error).message : null;
+
+  const handleCreate = (e: FormEvent) => {
+    e.preventDefault();
+    createRule.mutate({ dimension, operator, threshold });
   };
 
   return (
@@ -164,10 +162,7 @@ export const TrendsPage = () => {
 
           <form
             className="mt"
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleCreate();
-            }}
+            onSubmit={handleCreate}
           >
             <div className="row wrap">
               <select value={dimension} onChange={(e) => setDimension(e.target.value)}>
@@ -189,7 +184,7 @@ export const TrendsPage = () => {
                 onChange={(e) => setThreshold(Number(e.target.value))}
                 style={{ width: 80 }}
               />
-              <button type="submit" disabled={creating}>
+              <button type="submit" disabled={createRule.isPending}>
                 Add rule
               </button>
             </div>

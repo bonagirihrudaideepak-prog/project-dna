@@ -26,3 +26,6 @@ backups/
 Thumbs.db
 .vscode/
 .idea/
+
+# Build metadata
+*.tsbuildinfo

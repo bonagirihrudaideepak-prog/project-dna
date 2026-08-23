@@ -1,7 +1,6 @@
 import { useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { ScoreCard } from "../lib/components";
-import { api } from "../lib/api";
+import { useDNA } from "../hooks/useDNA";
 import { useSnapshotId } from "../hooks/useJob";
 import { ErrorState, LoadingState } from "../components/StateViews";
 
@@ -9,11 +8,7 @@ export const DNAPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
   const { snapshotId, loading: snapLoading } = useSnapshotId(projectId);
 
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["analysis", snapshotId],
-    queryFn: () => api.dna(snapshotId!),
-    enabled: !!snapshotId,
-  });
+  const { data, isLoading, isError, error, refetch } = useDNA(snapshotId);
 
   if (snapLoading || isLoading) return <LoadingState />;
   if (!snapshotId) return <div className="p-8">No analysis snapshot available for this project yet.</div>;

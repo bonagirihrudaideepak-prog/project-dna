@@ -1,23 +1,20 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Card } from "../lib/components";
-import { api } from "../lib/api";
+import { useProjects } from "../hooks/useProjects";
 import { ErrorState, LoadingState } from "../components/StateViews";
 import type { Project } from "../lib/types";
 
 export const ComparePage = () => {
   const [selected, setSelected] = useState<Project[]>([]);
-  const { data: projects, isLoading, isError, error, refetch } = useQuery<Project[]>({
-    queryKey: ["projects"],
-    queryFn: api.projects,
-  });
+  // Anonymous-friendly: fetch immediately (backend serves fixtures without auth).
+  const { projects, isLoading, isError, error, refetch } = useProjects(undefined, { enabled: true });
 
   if (isLoading) return <LoadingState />;
   if (isError) {
     return <ErrorState message={(error as Error).message} onRetry={() => refetch()} />;
   }
 
-  const list = projects ?? [];
+  const list = projects;
 
   const toggleProject = (project: Project) => {
     setSelected((prev) => {

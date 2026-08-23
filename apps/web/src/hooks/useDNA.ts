@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { queryKeys } from "../lib/queryKeys";
 import type { DNAScore } from "../lib/types";
 
-export function useDNA(snapshotId: string | undefined) {
+export function useDNA(snapshotId: string | null | undefined) {
   return useQuery<DNAScore[]>({
-    queryKey: ["analysis", snapshotId],
+    queryKey: queryKeys.analysis(snapshotId),
     queryFn: () => api.dna(snapshotId ?? ""),
     enabled: !!snapshotId,
     staleTime: 30_000,

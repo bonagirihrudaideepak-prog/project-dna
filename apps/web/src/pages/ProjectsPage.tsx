@@ -1,9 +1,13 @@
 import { Link } from "react-router-dom";
 import { Button, Card } from "../lib/components";
+import { LoadingState } from "../components/StateViews";
 import type { Project } from "../lib/types";
 
-export const ProjectsPage = ({ projects }: { projects: Project[] }) => {
-  const connected = projects?.length > 0;
+export const ProjectsPage = ({ projects, loading = false }: { projects: Project[]; loading?: boolean }) => {
+  const count = projects.length;
+  const connected = count > 0;
+
+  if (loading) return <LoadingState />;
 
   return (
     <div className="min-h-screen bg-pageBg">
@@ -28,22 +32,9 @@ export const ProjectsPage = ({ projects }: { projects: Project[] }) => {
               Connect GitHub to analyze repositories
             </Button>
           </div>
-        ) : null}
-
-        {connected && (projects?.length ?? 0) === 0 && (
-          <div className="mt-8 text-center">
-            <p className="text-slate-500">
-              No projects yet.{" "}
-              <Button variant="outline" onClick={() => window.location.href = "/api/v1/auth/github/start"}>
-                Start your first analysis
-              </Button>
-            </p>
-          </div>
-        )}
-
-        {connected && (projects?.length ?? 0) > 0 && (
+        ) : (
           <div className="grid grid-cols-1 gap-4">
-            {projects!.map((project) => (
+            {projects.map((project) => (
               <Link
                 key={project.id}
                 to={`/projects/${project.id}`}
