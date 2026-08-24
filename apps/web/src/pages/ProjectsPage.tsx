@@ -1,16 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Button, Card } from "../lib/components";
 import { LoadingState } from "../components/StateViews";
 import { api } from "../lib/api";
-import type { Project } from "../lib/types";
-
-// Offline demo repositories shipped with the API (fixture mode).
-const DEMO_REPOS = [
-  { full_name: "student/minimal-app", label: "Minimal app", blurb: "Analyze a tiny repo in seconds" },
-  { full_name: "team/wardrobe-api", label: "Mature API", blurb: "Tests, CI, docs, migrations" },
-  { full_name: "student/evolution-app", label: "Evolution", blurb: "History across many snapshots" },
-];
+import { queryKeys } from "../lib/queryKeys";
+import type { GitHubRepo, Project } from "../lib/types";
 
 export const ProjectsPage = ({
   projects,
@@ -22,40 +17,53 @@ export const ProjectsPage = ({
   authRequired?: boolean;
 }) => {
   const navigate = useNavigate();
+  const [filter, setFilter] = useState("");
   const [starting, setStarting] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
 
-  if (loading) return <LoadingState />;
+  // Real GitHub repositories accessible with the signed-in user's token.
+  const {
+    data: ghRepos,
+    isLoading: ghLoading,
+    isError: ghError,
+  } = useQuery<GitHubRepo[]>({
+    queryKey: ["github-repos", filter],
+    queryFn: () => api.githubRepositories(filter),
+    enabled: !authRequired && !loading,
+    staleTime: 60_000,
+    retry: false,
+  });
 
-  const startDemo = async (fullName: string) => {
+  const alreadyImported = useMemo(
+    () => new Set(projects.map((p) => p.full_name)),
+    [projects],
+  );
+
+  const startAnalysis = async (repo: GitHubRepo) => {
     setStartError(null);
-    setStarting(fullName);
+    setStarting(repo.full_name);
     try {
-      // Import returns the project (existing or newly created); queueing an
-      // analysis gives the worker something to do immediately.
-      const project = await api.importProject(fullName);
+      const project = await api.importProject(repo.full_name, repo.default_branch);
       await api.queueAnalysis(project.id);
       setStarting(null);
       navigate(`/projects/${project.id}`);
     } catch (e) {
-      setStartError((e as Error).message);
+      setStartError(`${repo.full_name}: ${(e as Error).message}`);
       setStarting(null);
     }
   };
 
+  if (loading) return <LoadingState />;
+
   return (
     <div className="min-h-screen bg-pageBg">
-      {/* Header */}
       <header className="pt-8 pb-6 border-b border-borderDefault">
-        <h1 className="text-3xl font-bold text-slate-700">
-          {projects.length > 0 ? "Your Projects" : "Projects"}
-        </h1>
+        <h1 className="text-3xl font-bold text-slate-700">Projects</h1>
         <p className="text-slate-500 text-sm mt-1">
-          Software archaeology &amp; project intelligence platform
+          Import a GitHub repository and reconstruct its history.
         </p>
       </header>
 
-      {/* Main content */}
       <main className="p-4 md:p-8">
         {authRequired ? (
           <div className="mt-8 max-w-md">
@@ -63,53 +71,95 @@ export const ProjectsPage = ({
               onClick={() => window.location.href = "/api/v1/auth/github/start"}
               className="cta-primary"
             >
-              Connect GitHub to analyze repositories
+              Connect GitHub to get started
             </Button>
           </div>
         ) : (
           <>
-            {projects.length === 0 && (
-              <p className="muted mb-4">No projects yet. Start with a demo repository:</p>
+            {startError && (
+              <div className="card mt mb-4" style={{ borderColor: "var(--error)" }}>
+                <span className="badge bad">Error</span> {startError}
+              </div>
             )}
 
-            {!authRequired && projects.length === 0 && (
+            {/* ── Existing analyzed projects ── */}
+            {projects.length > 0 && (
               <section className="mb-8">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {DEMO_REPOS.map((repo) => (
-                    <Card key={repo.full_name} className="p-6 hover:shadow-md transition-shadow">
-                      <h3 className="font-medium text-lavenderPrimary">{repo.label}</h3>
-                      <p className="text-slate-500 text-sm mt-1 mb-4">{repo.blurb}</p>
-                      <Button onClick={() => void startDemo(repo.full_name)} disabled={starting !== null}>
-                        {starting === repo.full_name ? "Starting…" : "Analyze"}
-                      </Button>
-                    </Card>
+                <h2 className="text-xl font-bold text-slate-700 mb-3">Your projects</h2>
+                <div className="grid grid-cols-1 gap-4">
+                  {projects.map((project) => (
+                    <a key={project.id} href={`/projects/${project.id}`} style={{ textDecoration: "none" }}>
+                      <Card className="p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start">
+                          <div className="w-10 h-10 rounded-md bg-lavenderSoft flex items-center justify-center flex-shrink-0">
+                            <span className="text-lavenderPrimary font-medium">
+                              {project.name?.slice(0, 3)}
+                            </span>
+                          </div>
+                          <div className="ml-3 flex-1">
+                            <p className="font-medium text-slate-700 truncate">
+                              {project.name || "Unknown"}
+                            </p>
+                            <p className="text-slate-500 text-sm">{project.full_name}</p>
+                          </div>
+                        </div>
+                      </Card>
+                    </a>
                   ))}
                 </div>
-                {startError && <p className="small bad mt-2">{startError}</p>}
               </section>
             )}
 
-            <div className="grid grid-cols-1 gap-4">
-              {projects.map((project) => (
-                <a key={project.id} href={`/projects/${project.id}`} style={{ textDecoration: "none" }}>
-                  <Card className="p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start">
-                      <div className="w-10 h-10 rounded-md bg-lavenderSoft flex items-center justify-center flex-shrink-0">
-                        <span className="text-lavenderPrimary font-medium">
-                          {project.name?.slice(0, 3)}
-                        </span>
+            {/* ── GitHub repository picker ── */}
+            <section>
+              <div className="row between wrap mb-3">
+                <h2 className="text-xl font-bold text-slate-700">GitHub repositories</h2>
+                <input
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  placeholder="Filter by name…"
+                  style={{ maxWidth: 260 }}
+                />
+              </div>
+
+              {ghLoading ? (
+                <LoadingState />
+              ) : ghError ? (
+                <p className="muted small">
+                  Could not load repositories. Check your GitHub connection and retry.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4">
+                  {(ghRepos ?? []).map((repo) => (
+                    <Card key={repo.github_repo_id ?? repo.full_name} className="p-4">
+                      <div className="row between wrap">
+                        <div className="flex-1 min-width-0">
+                          <p className="font-medium text-slate-700 truncate">{repo.full_name}</p>
+                          <p className="text-slate-500 text-sm truncate">
+                            {repo.description || "No description"}
+                          </p>
+                          <span className="badge accent" style={{ marginTop: 4 }}>
+                            {repo.visibility}
+                          </span>{" "}
+                          {alreadyImported.has(repo.full_name) && (
+                            <span className="badge ok">imported</span>
+                          )}
+                        </div>
+                        <Button
+                          onClick={() => void startAnalysis(repo)}
+                          disabled={starting !== null}
+                        >
+                          {starting === repo.full_name ? "Starting…" : "Analyze"}
+                        </Button>
                       </div>
-                      <div className="ml-3 flex-1">
-                        <p className="font-medium text-slate-700 truncate">
-                          {project.name || "Unknown"}
-                        </p>
-                        <p className="text-slate-500 text-sm">{project.full_name}</p>
-                      </div>
-                    </div>
-                  </Card>
-                </a>
-              ))}
-            </div>
+                    </Card>
+                  ))}
+                  {(ghRepos ?? []).length === 0 && (
+                    <p className="muted small">No repositories matched.</p>
+                  )}
+                </div>
+              )}
+            </section>
           </>
         )}
       </main>

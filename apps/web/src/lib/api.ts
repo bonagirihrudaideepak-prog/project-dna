@@ -14,6 +14,7 @@ import type {
   Alert,
   TrendPoint,
   Methodology,
+  GitHubRepo,
 } from "./types";
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -42,6 +43,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   me: () => request<User>("/auth/me").catch(() => null),
+  githubRepositories: (q = "", page = 1) =>
+    request<GitHubRepo[]>(
+      `/github/repositories?page=${page}` + (q ? `&q=${encodeURIComponent(q)}` : ""),
+    ),
   importProject: (fullName: string, branch?: string) =>
     request<Project>("/projects/import", {
       method: "POST",

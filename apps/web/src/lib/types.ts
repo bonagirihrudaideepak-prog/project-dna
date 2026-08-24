@@ -189,6 +189,16 @@ export interface ApiErrorResponse {
     retryable: boolean;
   };
 }
+export interface GitHubRepo {
+  github_repo_id: number | null;
+  full_name: string;
+  owner: string;
+  name: string;
+  visibility: string;
+  default_branch: string;
+  description: string | null;
+}
+
 export interface MethodologyIndicator {
   key: string;
   weight: number;

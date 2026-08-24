@@ -96,15 +96,30 @@ async def list_repositories(
     user_id: str | None = Depends(optional_user),
     db: Session = Depends(get_db),
 ):
-    """List accessible repositories. When no OAuth token is configured, list
-    seeded fixture repositories for offline development.
-
-    Authenticated in production: this route proxies through the server-level
-    GitHub token, so anonymous access would leak token-scoped listings and burn
-    the server's rate limit. Fixture fallback stays world-readable in dev."""
+    """List repositories accessible to the signed-in user (their OAuth token),
+    falling back to the server-level GITHUB_TOKEN when configured. Fixture
+    repos are listed only outside production when no token is available."""
     if settings.env == "production" and not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    token = settings.github_token
+
+    from ...adapters.security import decrypt_token
+    from ...models import GitHubConnection
+
+    token = ""
+    if user_id:
+        conn = (
+            db.query(GitHubConnection)
+            .filter(GitHubConnection.user_id == user_id, GitHubConnection.revoked_at.is_(None))
+            .first()
+        )
+        if conn:
+            try:
+                token = decrypt_token(conn.encrypted_token)
+            except RuntimeError:
+                token = ""
+    if not token:
+        token = settings.github_token or ""
+
     if token:
         adapter = GitHubAdapter(token=token)
         try:
@@ -125,10 +140,10 @@ async def list_repositories(
         finally:
             await adapter.close()
 
-    # Fixture fallback
+    # Fixture fallback (dev/offline only)
     fixture_root = Path(settings.fixture_root)
     out = []
-    if fixture_root.exists():
+    if settings.env != "production" and fixture_root.exists():
         for d in sorted(fixture_root.iterdir()):
             manifest = d / "manifest.json"
             if manifest.exists():
@@ -138,7 +153,7 @@ async def list_repositories(
                 except Exception:  # noqa: BLE001 - unreadable manifests are skipped
                     continue
     if not out:
-        raise HTTPException(status_code=503, detail="No GitHub token and no fixtures available")
+        raise HTTPException(status_code=503, detail="No GitHub token available; connect GitHub or set GITHUB_TOKEN")
     return out
 
 
