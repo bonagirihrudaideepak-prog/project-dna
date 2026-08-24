@@ -15,6 +15,7 @@ Failure semantics:
 
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -128,13 +129,16 @@ def _claim_job() -> AnalysisJob | None:
         if not row:
             return None
         conn.execute(
-            text("UPDATE analysis_jobs SET state=:state, lease_until=:lease WHERE id=:id"),
-            {"lease": datetime.now(timezone.utc) + timedelta(seconds=JOB_LEASE_SECONDS), "id": row[0], "state": JOB_STATE_RUNNING},
+            text("UPDATE analysis_jobs SET state=:running, lease_until=:lease WHERE id=:id"),
+            {"lease": datetime.now(timezone.utc) + timedelta(seconds=JOB_LEASE_SECONDS), "id": row[0], "running": JOB_STATE_RUNNING},
         )
         job_id = row[0]
     db = SessionLocal()
     try:
-        return db.get(AnalysisJob, job_id)
+        job = db.get(AnalysisJob, job_id)
+        if job is not None:
+            print(f"[worker] claimed {job_id} (attempts={job.attempts})", flush=True)
+        return job
     finally:
         db.close()
 
@@ -337,11 +341,21 @@ def worker_once() -> int:
         finally:
             db.close()
     except Exception as exc:  # noqa: BLE001
+        import traceback
+
         metrics.jobs_failed.inc()
+        tb_text = traceback.format_exc()
+        print(f"[worker] failure detail: {type(exc).__name__}: {exc}", flush=True)
+        if os.environ.get("WORKER_TRACEBACKS"):
+            print(tb_text, flush=True)
         db = SessionLocal()
         try:
             j = db.get(AnalysisJob, job_id)
             if j:
+                # The lease belonged to the execution that just died; without
+                # clearing it a RETRY would sit unclaimable for up to
+                # JOB_LEASE_SECONDS.
+                j.lease_until = None
                 # Check dead man's switch: if lease is stale, treat as failure
                 if _dead_man_switch(job_id):
                     j.state = JOB_STATE_FAILED
@@ -350,7 +364,9 @@ def worker_once() -> int:
                 elif j.attempts >= MAX_ATTEMPTS or _deadline_passed(job_id):
                     j.state = JOB_STATE_FAILED
                     j.error_code = getattr(exc, "code", "WORKER_FAILED")
-                    j.error_detail = str(exc)[:2000]
+                    # Keep the full traceback: str(exc) alone is useless for
+                    # diagnosing async/lifecycle failures.
+                    j.error_detail = (str(exc) + "\n" + tb_text)[-2000:]
                     snapshot = db.get(RepositorySnapshot, j.snapshot_id)
                     if snapshot and snapshot.status != JOB_STATE_COMPLETED:
                         snapshot.status = JOB_STATE_FAILED
@@ -367,6 +383,11 @@ def worker_once() -> int:
 
 
 def run_forever():
+    import faulthandler
+
+    # Watchdog: one stack dump if a single poll-cycle blocks >5min (true hang);
+    # repeats disabled so long legitimate phases stay quiet.
+    faulthandler.dump_traceback_later(300, repeat=False)
     metrics.worker_online.set(1)
     print(f"[worker] started (fixture_root={settings.fixture_root})", flush=True)
     while True:

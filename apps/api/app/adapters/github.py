@@ -213,6 +213,26 @@ class GitHubAdapter:
             )
         return out
 
+    async def artifacts(self, full_name: str, branch: str, limit: int = 2000) -> list[dict[str, Any]]:
+        """Aggregate repository history in the artifact-dict shape consumed by
+        the scoring pipeline / timeline builder (mirrors ``FixtureSource``).
+
+        Bounded by ``limit`` for commits; PRs/issues/releases are capped at
+        proportional slices so huge repos cannot produce unbounded fetches."""
+        from dataclasses import asdict
+
+        commit_limit = max(limit, 100)
+        side_limit = min(500, max(100, limit // 4))
+
+        releases = await self.releases(full_name, limit=100)
+        prs = await self.pull_requests(full_name, limit=side_limit)
+        issues = await self.issues(full_name, limit=side_limit)
+        commits = await self.commits(full_name, branch, limit=commit_limit)
+
+        # Newest-first within each type; the timeline builder sorts globally.
+        combined = [*releases, *prs, *issues, *commits]
+        return [asdict(a) for a in combined]
+
     async def contributors(self, full_name: str, limit: int = 100) -> list[dict]:
         data = await self._paginate(f"/repos/{full_name}/contributors", limit=limit)
         return [

@@ -3,6 +3,7 @@ results transactionally."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,7 +11,6 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from ..adapters.github import GitHubAdapter
 from ..config import settings
 from ..domain.analysis.graph.builder import build_graph
 from ..domain.analysis.inspector import inspect_directory, inspect_zip
@@ -165,16 +165,32 @@ def run_snapshot_analysis(db: Session, snapshot_id: str, source: Any, heartbeat:
 
 
 def _extract_source(source: Any, full_name: str, branch: str):
-    """Fetch repository metadata, artifacts, and inspection from the source."""
+    """Fetch repository metadata, artifacts, and inspection from the source.
+
+    GitHub-mode extraction runs on ONE event loop: httpx clients bind their
+    connection pool to the loop that created them, so spreading calls across
+    ``asyncio.run()`` invocations fails with 'Event loop is closed'."""
     if isinstance(source, FixtureSource):
         sha = asyncio_sync(source.default_branch_sha, full_name, branch)
         artifacts = asyncio_sync(source.artifacts, full_name, branch, settings.analysis_max_commits)
         inspection = source.inspect()
         file_changes = source.file_changes()
     else:
-        sha = asyncio_sync(source.default_branch_sha, full_name, branch)
-        artifacts = asyncio_sync(source.artifacts, full_name, branch, settings.analysis_max_commits)
-        inspection, file_changes = _github_inspect(source, full_name, sha, branch)
+
+        async def _extract_github():
+            try:
+                sha_ = await source.default_branch_sha(full_name, branch)
+                artifacts_ = await source.artifacts(full_name, branch, settings.analysis_max_commits)
+                archive = await source.archive_bytes(full_name, sha_)
+                inspection_ = inspect_zip(archive, settings.analysis_max_file_bytes)
+                # file_changes require full git history; archives do not carry it.
+                return sha_, artifacts_, inspection_, []
+            finally:
+                # Must run on the SAME loop the client was created on; closing
+                # from another asyncio.run() raises 'Event loop is closed'.
+                await source.close()
+
+        sha, artifacts, inspection, file_changes = asyncio.run(_extract_github())
     return sha, artifacts, inspection, file_changes, list(inspection.warnings)
 
 
@@ -399,13 +415,6 @@ def _build_and_store_graph(
                 evidence_json=e["evidence_json"],
             ))
     db.commit()
-
-
-def _github_inspect(source: GitHubAdapter, full_name: str, sha: str, branch: str):
-    archive = asyncio_sync(source.archive_bytes, full_name, sha)
-    inspection = inspect_zip(archive, settings.analysis_max_file_bytes)
-    # file_changes are derived from commit history; archive + artifacts suffice.
-    return inspection, []
 
 
 def asyncio_sync(coro_fn, *args):
