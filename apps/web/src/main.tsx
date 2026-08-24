@@ -12,7 +12,12 @@ const queryClient = new QueryClient({
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter
+        // Opt into v7 behavior early: state updates wrap in startTransition
+        // (lazy routes can suspend without crashing) + splat-path resolution,
+        // which also silences the future-flag warnings.
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <App />
       </BrowserRouter>
     </QueryClientProvider>

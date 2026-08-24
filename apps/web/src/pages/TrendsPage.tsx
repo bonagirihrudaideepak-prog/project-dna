@@ -49,7 +49,7 @@ export const TrendsPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
   const { data: trends, isLoading, isError, refetch } = useTrends(projectId);
   const { data: rules } = useAlertRules(projectId);
-  const { data: alerts } = useAlerts();
+  const { data: alerts } = useAlerts({ enabled: !!projectId });
   const acknowledge = useAcknowledgeAlert();
   const deleteRule = useDeleteAlertRule(projectId ?? "");
   const createRule = useCreateAlertRule(projectId);

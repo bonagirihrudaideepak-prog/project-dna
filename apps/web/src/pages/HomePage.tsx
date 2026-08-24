@@ -68,7 +68,7 @@ export default function HomePage() {
   const { user, projects, loading } = useUserAndProjects();
   const { project, projectId } = useActiveProject(projects);
   const { data: trends } = useTrends(projectId);
-  const { data: alerts } = useAlerts();
+  const { data: alerts } = useAlerts({ enabled: !!user });
 
   // Re-run analysis straight from the dashboard banner.
   const analyzed = projects.filter((p) => p.latest_snapshot?.status === "COMPLETED");

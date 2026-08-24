@@ -3,10 +3,12 @@ import { api } from "../lib/api";
 import { queryKeys } from "../lib/queryKeys";
 import type { Alert, AlertRule } from "../lib/types";
 
-export function useAlerts() {
+export function useAlerts(options?: { enabled?: boolean }) {
   return useQuery<Alert[]>({
     queryKey: queryKeys.alerts(),
     queryFn: () => api.alerts(),
+    // Anonymous visitors have no alerts feed — skip the guaranteed 401.
+    enabled: options?.enabled ?? true,
     staleTime: 30_000,
   });
 }
