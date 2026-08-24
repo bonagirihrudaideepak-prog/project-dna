@@ -43,6 +43,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   me: () => request<User>("/auth/me").catch(() => null),
+  logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
   githubRepositories: (q = "", page = 1) =>
     request<GitHubRepo[]>(
       `/github/repositories?page=${page}` + (q ? `&q=${encodeURIComponent(q)}` : ""),
