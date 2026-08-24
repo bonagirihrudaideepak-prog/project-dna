@@ -11,13 +11,19 @@ export function useProjects(userId?: string, options?: { enabled?: boolean }) {
     // Callers fetching anonymously pass { enabled: true }.
     enabled: options?.enabled ?? !!userId,
     staleTime: 30_000,
-    retry: 1,
+    retry: 0,
+    // A signed-out production user would otherwise re-401 on every focus.
+    refetchOnWindowFocus: false,
   });
+
+  const status = (error as (Error & { status?: number }) | null)?.status;
 
   return {
     projects: data ?? [],
     isLoading,
     isError,
+    /** True when the backend requires sign-in for this listing. */
+    authRequired: isError && status === 401,
     error: error as Error | null,
     refetch,
   };

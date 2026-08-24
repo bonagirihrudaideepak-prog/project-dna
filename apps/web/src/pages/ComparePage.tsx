@@ -6,10 +6,23 @@ import type { Project } from "../lib/types";
 
 export const ComparePage = () => {
   const [selected, setSelected] = useState<Project[]>([]);
-  // Anonymous-friendly: fetch immediately (backend serves fixtures without auth).
-  const { projects, isLoading, isError, error, refetch } = useProjects(undefined, { enabled: true });
+  // Anonymous-friendly where the backend allows it; in production this comes
+  // back 401 and we show a sign-in prompt instead of an error.
+  const { projects, isLoading, isError, error, authRequired, refetch } = useProjects(undefined, {
+    enabled: true,
+  });
 
   if (isLoading) return <LoadingState />;
+  if (authRequired) {
+    return (
+      <div className="min-h-screen bg-pageBg p-4 md:p-8">
+        <h1 className="text-2xl font-bold text-slate-700 mb-4">Compare</h1>
+        <p className="muted">
+          Sign in with GitHub (link in the sidebar) to compare project snapshots.
+        </p>
+      </div>
+    );
+  }
   if (isError) {
     return <ErrorState message={(error as Error).message} onRetry={() => refetch()} />;
   }
