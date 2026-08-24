@@ -65,12 +65,28 @@ function stubMethodology(page: import("@playwright/test").Page) {
   );
 }
 
-test("landing page renders hero and quick start", async ({ page }) => {
+test("landing page renders hero and CTAs", async ({ page }) => {
+  await stubApi(page);
+  await page.goto("/landing");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Software archaeology");
+  await expect(page.getByText("for your codebase")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect GitHub" })).toBeVisible();
+});
+
+test("dashboard greets anonymous visitors", async ({ page }) => {
   await stubApi(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Project DNA");
-  await expect(page.getByText("Software archaeology & project intelligence platform")).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "Quick Start" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Dashboard");
+  await expect(page.getByText("Software archaeology intelligence for")).toBeVisible();
+  await expect(page.getByText(/Sign in with GitHub/)).toBeVisible();
+});
+
+test("auth wizard asks for GitHub when signed out", async ({ page }) => {
+  await stubApi(page);
+  await page.goto("/auth");
+  await expect(
+    page.getByRole("button", { name: /Continue with GitHub/ })
+  ).toBeVisible();
 });
 
 test("methodology page renders the 8 dimensions", async ({ page }) => {
@@ -83,7 +99,7 @@ test("methodology page renders the 8 dimensions", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Testing Maturity" })).toBeVisible();
 });
 
-test("navigation: sidebar links work", async ({ page }) => {
+test("navigation: topbar links work", async ({ page }) => {
   await stubApi(page);
   await stubMethodology(page);
   await page.goto("/");
