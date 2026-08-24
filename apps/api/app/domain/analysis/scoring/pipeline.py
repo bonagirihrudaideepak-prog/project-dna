@@ -42,13 +42,13 @@ _DECISIONS_FULL_CREDIT = 5.0
 _FOLLOWUPS_FULL_CREDIT = 5.0
 
 # Placeholder indicators: not computable from current evidence sources.
-# Quality factors deliberately keep their influence minimal; values are fixed
-# so results stay deterministic. Replacing these with real signals must go
-# through ADR review because it changes scores.
-_PLACEHOLDER_TEST_RECENCY = (0.5, 0.3)
-_PLACEHOLDER_ROLLBACK = (0.5, 0.4)
-_PLACEHOLDER_REWORK = (0.2, 0.3)
-_PLACEHOLDER_DEP_CONFIG = (0.2, 0.4)
+# Per the coverage-honesty rule they carry ZERO evidence-quality, so they add
+# nothing to the weighted score until a real signal exists. Replacing them
+# with measured signals must go through ADR review because it changes scores.
+_PLACEHOLDER_TEST_RECENCY = (0.0, 0.0)
+_PLACEHOLDER_ROLLBACK = (0.5, None)  # value grounded in release evidence; quality computed
+_PLACEHOLDER_REWORK = (0.0, 0.0)
+_PLACEHOLDER_DEP_CONFIG = (0.0, 0.0)
 
 _QF_COUNT_BASE = 0.7
 _QF_COUNT_SPAN = 0.3
@@ -185,9 +185,10 @@ def _documentation_inputs(ctx: dict[str, Any]) -> dict[str, Any]:
             min(1.0, docs["adrs"] / _ADRS_FULL), _qf(repo_rich, docs["adrs"]),
             docs["adrs"], docs["evidence"],
         ),
-        "api_user_docs": indicator_input(0.0, 0.2, "not detected", []),
+        "api_user_docs": indicator_input(0.0, 0.0, "not detected", []),
         "governance_docs": indicator_input(
-            1.0 if setup["readme_present"] else 0.0, 0.5,
+            1.0 if setup["readme_present"] else 0.0,
+            _qf(repo_rich, 1 if setup["readme_present"] else 0),
             setup["readme_present"], ["file:README" if setup["readme_present"] else ""],
         ),
     }
@@ -227,7 +228,7 @@ def _evolution_inputs(ctx: dict[str, Any]) -> dict[str, Any]:
 def _delivery_inputs(ctx: dict[str, Any]) -> dict[str, Any]:
     delivery, setup, repo_rich = ctx["delivery"], ctx["setup"], ctx["repo_rich"]
     checks = delivery.get("checks", {})
-    value, quality = _PLACEHOLDER_ROLLBACK
+    value = _PLACEHOLDER_ROLLBACK[0]
     release_urls = ctx["release_urls"]
     return {
         "automated_checks": indicator_input(
@@ -247,7 +248,8 @@ def _delivery_inputs(ctx: dict[str, Any]) -> dict[str, Any]:
             delivery.get("deploy_files", 0), delivery.get("evidence", []),
         ),
         "release_rollback_evidence": indicator_input(
-            value if ctx["has_releases"] else 0.0, quality,
+            value if ctx["has_releases"] else 0.0,
+            _qf(repo_rich, len(ctx["releases"])) if ctx["has_releases"] else 0.0,
             {"releases": len(ctx["releases"])}, release_urls,
         ),
     }

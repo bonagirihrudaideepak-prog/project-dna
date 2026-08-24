@@ -284,6 +284,30 @@ def _evaluate_and_store_alerts(snapshot: RepositorySnapshot) -> int:
         db.close()
 
 
+def _sweep_dead_snapshots(db, project_id: str) -> int:
+    """Housekeeping: delete FAILED/abandoned-PENDING snapshots past the TTL.
+
+    COMPLETED snapshots are never touched (scored history is product data).
+    Jobs cascade with their snapshot."""
+    from ..config.constants import DEAD_SNAPSHOT_TTL_DAYS
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=DEAD_SNAPSHOT_TTL_DAYS)
+    dead = (
+        db.query(RepositorySnapshot)
+        .filter(
+            RepositorySnapshot.project_id == project_id,
+            RepositorySnapshot.status.in_(["FAILED", "PENDING"]),
+            RepositorySnapshot.created_at < cutoff,
+        )
+        .all()
+    )
+    for snap in dead:
+        db.delete(snap)
+    if dead:
+        db.commit()
+    return len(dead)
+
+
 def worker_once() -> int:
     job = _claim_job()
     if not job:
@@ -305,6 +329,9 @@ def worker_once() -> int:
                     if alerts_created:
                         print(f"[worker] {alerts_created} alert(s) fired for {job_id}", flush=True)
                 _cache_service.invalidate_project(project_id)
+            swept = _sweep_dead_snapshots(db, project_id) if project_id else 0
+            if swept:
+                print(f"[worker] swept {swept} dead snapshot(s) for {project_id}", flush=True)
             print(f"[worker] completed {job_id}", flush=True)
             return 1
         finally:

@@ -78,9 +78,9 @@ test("methodology page renders the 8 dimensions", async ({ page }) => {
   await stubMethodology(page);
   await page.goto("/methodology");
   await expect(page.getByRole("heading", { level: 1, name: "Methodology" })).toBeVisible();
-  await expect(page.getByText("Technical Complexity")).toBeVisible();
-  await expect(page.getByText("Maintainability")).toBeVisible();
-  await expect(page.getByText("Testing Maturity")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Technical Complexity" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Maintainability" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Testing Maturity" })).toBeVisible();
 });
 
 test("navigation: sidebar links work", async ({ page }) => {

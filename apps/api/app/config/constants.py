@@ -76,6 +76,11 @@ JOB_STATE_COMPLETED: str = "COMPLETED"
 JOB_STATE_FAILED: str = "FAILED"
 JOB_STATE_CANCELLED: str = "CANCELLED"
 
+# Housekeeping: snapshots that never produced results (FAILED or abandoned
+# PENDING) are swept after this many days. COMPLETED snapshots are never
+# swept automatically - retention of scored history is a product decision.
+DEAD_SNAPSHOT_TTL_DAYS: int = 7
+
 # Confidence label thresholds (ascending)
 COVERAGE_LABEL_THRESHOLDS: list[tuple[float, str]] = [
     (0.35, "insufficient"),
