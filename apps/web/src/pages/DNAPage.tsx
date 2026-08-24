@@ -58,8 +58,10 @@ export default function DNAPage() {
 
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
+  const [justFinished, setJustFinished] = useState(false);
   const { job } = useJob(jobId, () => {
     setJobId(null);
+    setJustFinished(true);
     qc.invalidateQueries({ queryKey: queryKeys.snapshots(projectId) });
     qc.invalidateQueries({ queryKey: queryKeys.analysis(snapshotId) });
     refetch();
@@ -97,6 +99,7 @@ export default function DNAPage() {
   const runAnalysis = async () => {
     if (!projectId) return;
     setJobError(null);
+    setJustFinished(false);
     try {
       const j = await api.queueAnalysis(projectId);
       setJobId(j.id);
@@ -149,6 +152,24 @@ export default function DNAPage() {
 
           {(jobError || job?.state === "FAILED") && (
             <ErrorState message={(job?.error_detail || jobError || "Analysis failed")} />
+          )}
+
+          {justFinished && !jobId && (
+            <div
+              className="rounded-xl px-4 py-3 mb-6 flex items-center gap-3"
+              style={{ backgroundColor: "#d1fae5", border: "1px solid #6ee7b7", fontSize: "13px", color: "#065f46" }}
+              role="status"
+            >
+              <strong>✓ Analysis complete</strong>
+              <span>Latest snapshot is shown below{snapshotId ? ` (${snapshotId.slice(0, 8)})` : ""}.</span>
+              <button
+                onClick={() => setJustFinished(false)}
+                className="ml-auto text-xs font-medium cursor-pointer"
+                style={{ background: "none", border: "none", color: "#065f46", padding: 0 }}
+              >
+                Dismiss
+              </button>
+            </div>
           )}
 
           {job && jobId && (

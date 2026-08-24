@@ -14,7 +14,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from ..adapters.cache_service import CacheService
-from ..adapters.errors import NotFoundError, PermissionDeniedError, ValidationError
+from ..adapters.errors import ConflictError, NotFoundError, PermissionDeniedError, ValidationError
 from ..config import settings
 from ..models import AnalysisJob, Project, ProjectMembership, RepositorySnapshot
 
@@ -109,7 +109,23 @@ def import_project(db: Session, user_id: str, full_name: str, branch: str | None
 
 
 def queue_analysis(db: Session, project: Project) -> AnalysisJob:
-    """Create a PENDING snapshot plus its QUEUED analysis job."""
+    """Create a PENDING snapshot plus its QUEUED analysis job.
+
+    Refuses to double-queue: one active (non-terminal) job per project, so
+    rapid re-clicks cannot pile up duplicate snapshots and worker load."""
+    active = (
+        db.query(AnalysisJob)
+        .join(RepositorySnapshot, RepositorySnapshot.id == AnalysisJob.snapshot_id)
+        .filter(
+            RepositorySnapshot.project_id == project.id,
+            AnalysisJob.state.notin_(["COMPLETED", "FAILED", "CANCELLED"]),
+        )
+        .first()
+    )
+    if active:
+        raise ConflictError(
+            "An analysis for this repository is already queued or running",
+        )
     snapshot = RepositorySnapshot(
         project_id=project.id,
         commit_sha="",

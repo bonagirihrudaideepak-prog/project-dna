@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   CartesianGrid,
   Legend,
@@ -65,10 +65,13 @@ function statusDotColor(status?: string) {
 
 export default function HomePage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { user, projects, loading } = useUserAndProjects();
   const { project, projectId } = useActiveProject(projects);
   const { data: trends } = useTrends(projectId);
   const { data: alerts } = useAlerts({ enabled: !!user });
+  const [runError, setRunError] = useState<string | null>(null);
+  const [queuing, setQueuing] = useState(false);
 
   // Re-run analysis straight from the dashboard banner.
   const analyzed = projects.filter((p) => p.latest_snapshot?.status === "COMPLETED");
@@ -96,9 +99,19 @@ export default function HomePage() {
 
   const runAnalysis = async () => {
     if (!projectId) return;
-    await api.queueAnalysis(projectId);
-    qc.invalidateQueries({ queryKey: queryKeys.snapshots(projectId) });
-    qc.invalidateQueries({ queryKey: queryKeys.trends(projectId) });
+    setRunError(null);
+    setQueuing(true);
+    try {
+      await api.queueAnalysis(projectId);
+      qc.invalidateQueries({ queryKey: queryKeys.snapshots(projectId) });
+      qc.invalidateQueries({ queryKey: queryKeys.trends(projectId) });
+      // Progress + completion live on the DNA page; land the user there.
+      navigate(`/dna?project=${projectId}`);
+    } catch (e) {
+      setRunError((e as Error).message);
+    } finally {
+      setQueuing(false);
+    }
   };
 
   if (loading) return <LoadingState />;
@@ -273,14 +286,19 @@ export default function HomePage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <PrimaryButton onClick={() => void runAnalysis()} disabled={!projectId}>
-                  Run Analysis →
+                <PrimaryButton onClick={() => void runAnalysis()} disabled={!projectId || queuing}>
+                  {queuing ? "Queuing…" : "Run Analysis →"}
                 </PrimaryButton>
                 <Link to="/projects" style={{ textDecoration: "none" }}>
                   <GhostButton>View Projects</GhostButton>
                 </Link>
               </div>
             </div>
+            {runError && (
+              <p className="mt-3 mb-0" style={{ fontSize: "12px", color: C.error }} role="alert">
+                {runError}
+              </p>
+            )}
           </div>
         </>
       )}
