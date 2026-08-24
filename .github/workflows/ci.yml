@@ -84,10 +84,7 @@ jobs:
         run: npm ci
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-      - name: Start dev server
-        run: |
-          npm run dev -- --port 5173 &
-          npx wait-on http://localhost:5173
+      # playwright.config.ts starts/stops the vite dev server itself.
       - name: Run E2E tests
         run: npm run test:e2e
       - uses: actions/upload-artifact@v4

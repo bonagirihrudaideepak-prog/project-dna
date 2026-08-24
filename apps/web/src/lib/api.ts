@@ -42,6 +42,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   me: () => request<User>("/auth/me").catch(() => null),
+  importProject: (fullName: string, branch?: string) =>
+    request<Project>("/projects/import", {
+      method: "POST",
+      body: JSON.stringify({ full_name: fullName, branch }),
+    }),
   projects: () => request<Project[]>("/projects"),
   project: (id: string) => request<Project>(`/projects/${id}`),
   queueAnalysis: (projectId: string) =>
