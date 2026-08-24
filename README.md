@@ -29,11 +29,11 @@ project-dna/
   apps/
     api/
       app/                 # FastAPI application
-        analysis/          # inspector, metrics, scoring, timeline, graph
-        api/               # routers (auth, projects, dna, archaeology, analysis)
-        github/            # GitHub adapter
+        interfaces/        # routers (auth, projects, dna, archaeology, analysis, alerts) + deps/schemas
+        application/       # use-case orchestration (analysis, similarity, exports, llm_service)
+        domain/            # pure logic: analysis (inspector, scoring, timeline, graph)
+        adapters/          # external I/O (db, cache, github, llm, security, errors)
         models/            # SQLAlchemy models
-        services/          # analysis orchestration, similarity, exports
         worker/            # job worker
       migrations/          # Alembic
       tests/               # pytest (unit + integration)

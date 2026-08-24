@@ -2,7 +2,7 @@
 
 import json
 
-from app.llm.prompts import PROMPT_VERSION, build_messages, validate_output
+from app.adapters.llm.prompts import PROMPT_VERSION, build_messages, validate_output
 
 
 def test_prompt_version():

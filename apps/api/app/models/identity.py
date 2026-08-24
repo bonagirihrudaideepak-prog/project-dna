@@ -1,10 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .base import Base, StringPKMixin, TimestampMixin, uuid_pk
+from .base import Base, TimestampMixin, uuid_pk
 
 
 class User(Base, TimestampMixin):
@@ -61,6 +61,9 @@ class Project(Base, TimestampMixin):
         back_populates="project", cascade="all, delete-orphan"
     )
     experiments: Mapped[list["Experiment"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    alert_rules: Mapped[list["AlertRule"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
 

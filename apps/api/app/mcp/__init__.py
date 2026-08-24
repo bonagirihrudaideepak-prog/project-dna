@@ -1,0 +1,1 @@
+"""MCP server: exposes Project DNA read-only tools to AI agents."""

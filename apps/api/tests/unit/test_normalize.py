@@ -1,11 +1,11 @@
 """Unit tests for normalization helpers."""
 
-from app.analysis.scoring.normalize import (
+from app.domain.analysis.scoring.normalize import (
     boolean,
     capped_ratio,
     clamp01,
-    inverted,
     inverse_weighted,
+    inverted,
     linear,
     log_scale,
 )

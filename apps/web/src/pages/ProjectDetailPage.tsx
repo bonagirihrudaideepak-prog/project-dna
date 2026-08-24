@@ -2,19 +2,35 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { queryKeys } from "../lib/queryKeys";
 import { useJob, useSnapshotId } from "../hooks/useJob";
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
-  const { data: project } = useQuery({ queryKey: ["project", id], queryFn: () => api.project(id!) });
+  const { data: project } = useQuery({ queryKey: queryKeys.project(id), queryFn: () => api.project(id!) });
   const { snapshotId, loading } = useSnapshotId(id);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [queueing, setQueueing] = useState(false);
+  const [queueError, setQueueError] = useState<string | null>(null);
   const { job, error } = useJob(jobId, () => {
     setJobId(null);
-    qc.invalidateQueries({ queryKey: ["project", id] });
-    qc.invalidateQueries({ queryKey: ["snapshots", id] });
+    qc.invalidateQueries({ queryKey: queryKeys.project(id) });
+    qc.invalidateQueries({ queryKey: queryKeys.snapshots(id) });
   });
+
+  const queueAnalysis = async (projectId: string) => {
+    setQueueError(null);
+    setQueueing(true);
+    try {
+      const j = await api.queueAnalysis(projectId);
+      setJobId(j.id);
+    } catch (e) {
+      setQueueError((e as Error).message);
+    } finally {
+      setQueueing(false);
+    }
+  };
 
   return (
     <div>
@@ -30,15 +46,16 @@ export function ProjectDetailPage() {
             </p>
           </div>
           <div className="row">
-            <button
-              onClick={async () => {
-                const j = await api.queueAnalysis(project.id);
-                setJobId(j.id);
-              }}
-            >
+            <button onClick={() => queueAnalysis(project.id)} disabled={queueing}>
               Re-analyze
             </button>
           </div>
+        </div>
+      )}
+
+      {queueError && (
+        <div className="card mt">
+          <span className="badge bad">Error</span> Failed to queue analysis: {queueError}
         </div>
       )}
 
@@ -62,6 +79,10 @@ export function ProjectDetailPage() {
 
       <div className="mt-lg">
         <div className="grid grid-2">
+          <Link to={`/projects/${id}/trends`} className="card" style={{ color: "var(--text)" }}>
+            <h3>Trends &amp; Alerts</h3>
+            <p className="muted small">DNA scores across snapshots and threshold alerts.</p>
+          </Link>
           <Link to={`/projects/${id}/dna`} className="card" style={{ color: "var(--text)" }}>
             <h3>DNA Profile</h3>
             <p className="muted small">Eight explainable dimensions with evidence drill-down.</p>

@@ -1,141 +1,88 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../lib/api";
-import { DIMENSION_LABELS } from "../lib/format";
-import type { Snapshot } from "../lib/types";
+import { Card } from "../lib/components";
+import { useProjects } from "../hooks/useProjects";
+import { ErrorState, LoadingState } from "../components/StateViews";
+import type { Project } from "../lib/types";
 
-export function ComparePage() {
-  const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: api.projects });
-  const [pa, setPa] = useState("");
-  const [pb, setPb] = useState("");
-  const [result, setResult] = useState<Record<string, any> | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [snapshotsA, setSnapshotsA] = useState<Snapshot[]>([]);
-  const [snapshotsB, setSnapshotsB] = useState<Snapshot[]>([]);
+export const ComparePage = () => {
+  const [selected, setSelected] = useState<Project[]>([]);
+  // Anonymous-friendly where the backend allows it; in production this comes
+  // back 401 and we show a sign-in prompt instead of an error.
+  const { projects, isLoading, isError, error, authRequired, refetch } = useProjects(undefined, {
+    enabled: true,
+  });
 
-  async function loadSnapshots(pid: string, which: "A" | "B") {
-    if (!pid) return;
-    const snaps = await api.snapshots(pid);
-    const completed = snaps.filter((s) => s.status === "COMPLETED");
-    if (which === "A") {
-      setSnapshotsA(completed);
-      setPa(completed[0]?.id ?? "");
-    } else {
-      setSnapshotsB(completed);
-      setPb(completed[0]?.id ?? "");
-    }
+  if (isLoading) return <LoadingState />;
+  if (authRequired) {
+    return (
+      <div className="min-h-screen bg-pageBg p-4 md:p-8">
+        <h1 className="text-2xl font-bold text-slate-700 mb-4">Compare</h1>
+        <p className="muted">
+          Sign in with GitHub (link in the sidebar) to compare project snapshots.
+        </p>
+      </div>
+    );
+  }
+  if (isError) {
+    return <ErrorState message={(error as Error).message} onRetry={() => refetch()} />;
   }
 
-  async function runCompare() {
-    try {
-      const res = await api.compare(pa, pb);
-      setResult(res as Record<string, any>);
-      setError(null);
-    } catch (e) {
-      setError(String(e));
-    }
-  }
+  const list = projects;
+
+  const toggleProject = (project: Project) => {
+    setSelected((prev) => {
+      if (prev.some((p) => p.id === project.id)) return prev.filter((p) => p.id !== project.id);
+      if (prev.length >= 3) return prev;
+      return [...prev, project];
+    });
+  };
 
   return (
-    <div>
-      <h1 className="mb">Compare projects</h1>
-      <p className="muted mb">
-        Uses dimensions where both snapshots have sufficient coverage. Similarity is descriptive — not a
-        quality ranking.
-      </p>
+    <div className="min-h-screen bg-pageBg p-4 md:p-8">
+      <h1 className="text-2xl font-bold text-slate-700 mb-6">Compare Projects</h1>
 
-      <div className="grid grid-2">
-        <div className="card">
-          <h3 className="mb">Project A</h3>
-          <select value={snapshotsA.length ? "" : ""} onChange={(e) => loadSnapshots(e.target.value, "A")}>
-            <option value="">Choose project…</option>
-            {(projects ?? []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.full_name}
-              </option>
-            ))}
-          </select>
-          {snapshotsA.length > 0 && (
-            <select value={pa} onChange={(e) => setPa(e.target.value)}>
-              {snapshotsA.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.commit_sha.slice(0, 10)} · {new Date(s.captured_at!).toLocaleDateString()}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-        <div className="card">
-          <h3 className="mb">Project B</h3>
-          <select onChange={(e) => loadSnapshots(e.target.value, "B")}>
-            <option value="">Choose project…</option>
-            {(projects ?? []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.full_name}
-              </option>
-            ))}
-          </select>
-          {snapshotsB.length > 0 && (
-            <select value={pb} onChange={(e) => setPb(e.target.value)}>
-              {snapshotsB.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.commit_sha.slice(0, 10)} · {new Date(s.captured_at!).toLocaleDateString()}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+      <div className="mb-6">
+        <p className="text-slate-500 text-sm">Select up to 3 projects for comparison:</p>
       </div>
 
-      <div className="mt">
-        <button disabled={!pa || !pb} onClick={runCompare}>
-          Compare
-        </button>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        {list.map((project) => (
+          <Card
+            key={project.id}
+            className={
+              selected.some((p) => p.id === project.id)
+                ? "p-4 bg-lavenderSoft border border-lavenderPrimary cursor-pointer"
+                : "p-4 hover:shadow-md transition-shadow cursor-pointer"
+            }
+            onClick={() => toggleProject(project)}
+          >
+            <div className="flex items-start">
+              <div className="w-8 h-8 rounded-md bg-lavenderSoft flex items-center justify-center flex-shrink-0">
+                <span className="text-lavenderPrimary text-xs font-medium">{project.name.slice(0, 3)}</span>
+              </div>
+              <div className="ml-3 flex-1">
+                <p className="font-medium text-slate-700 truncate">{project.name || "Unknown"}</p>
+                <p className="text-slate-500 text-sm">{project.full_name}</p>
+              </div>
+            </div>
+          </Card>
+        ))}
       </div>
 
-      {error && <div className="card mt"><span className="badge bad">Error</span> {error}</div>}
-
-      {result && (
-        <div className="card mt">
-          <h3 className="mb">Similarity: {result.similarity ?? "n/a"} / 100</h3>
-          {result.warning && (
-            <p className="small" style={{ color: "var(--yellow)" }}>
-              ⚠ {result.warning}
-            </p>
-          )}
-          <p className="small muted">
-            {result.snapshot_a.project} ↔ {result.snapshot_b.project} · used{" "}
-            {(result.used_dimensions ?? []).length} dimensions · similarity coverage{" "}
-            {Math.round((result.similarity_coverage ?? 0) * 100)}%
-          </p>
-          {result.excluded_dimensions && result.excluded_dimensions.length > 0 && (
-            <p className="small muted">
-              Excluded (insufficient coverage): {result.excluded_dimensions.join(", ")}
-            </p>
-          )}
-          <h4 className="mt mb">Per-dimension deltas</h4>
-          <table>
-            <thead>
-              <tr>
-                <th>Dimension</th>
-                <th>A</th>
-                <th>B</th>
-                <th>Δ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(result.per_dimension ?? []).map((d: any) => (
-                <tr key={d.dimension}>
-                  <td>{DIMENSION_LABELS[d.dimension] || d.dimension}</td>
-                  <td>{d.a}</td>
-                  <td>{d.b}</td>
-                  <td>{d.abs_delta}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {selected.length > 0 && (
+        <div className="mt-6 p-4 bg-lavenderSoft rounded-md">
+          <h2 className="text-lg font-medium text-slate-700 mb-4">Comparison Summary</h2>
+          <div className="grid grid-cols-2 gap-4">
+            {selected.map((project) => (
+              <div key={project.id}>
+                <p className="text-sm text-slate-500">{project.name || "Unknown"}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
-}
+};
+
+export default ComparePage;

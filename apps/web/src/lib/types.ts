@@ -26,6 +26,7 @@ export interface DNAScore {
   confidence: string;
   direction: Direction;
   model_version: string;
+  explanation?: Record<string, unknown>;
 }
 
 export interface TimelineEvent {
@@ -145,6 +146,33 @@ export interface User {
   github_connected: boolean;
 }
 
+export interface AlertRule {
+  id: string;
+  project_id: string;
+  dimension: string;
+  operator: "lt" | "gt";
+  threshold: number;
+  enabled: boolean;
+}
+
+export interface Alert {
+  id: string;
+  rule_id: string;
+  snapshot_id: string;
+  dimension: string;
+  old_value: number | null;
+  new_value: number | null;
+  fired_at: string | null;
+  acknowledged_at: string | null;
+}
+
+export interface TrendPoint {
+  snapshot_id: string;
+  captured_at: string | null;
+  created_at: string | null;
+  scores: Record<string, number | null>;
+}
+
 // API response envelopes
 export interface ApiListResponse<T> {
   items: T[];
@@ -160,4 +188,40 @@ export interface ApiErrorResponse {
     message: string;
     retryable: boolean;
   };
+}
+export interface GitHubRepo {
+  github_repo_id: number | null;
+  full_name: string;
+  owner: string;
+  name: string;
+  visibility: string;
+  default_branch: string;
+  description: string | null;
+}
+
+export interface MethodologyIndicator {
+  key: string;
+  weight: number;
+  direction: Direction;
+}
+
+export interface MethodologyDimension {
+  key: string;
+  name: string;
+  direction: Direction;
+  description: string;
+  indicators: MethodologyIndicator[];
+}
+
+export interface CoverageLabel {
+  below: number;
+  label: string;
+}
+
+export interface Methodology {
+  model_version: string;
+  dimensions: MethodologyDimension[];
+  coverage_labels: CoverageLabel[];
+  min_coverage_for_score: number;
+  caveats: string[];
 }

@@ -1,6 +1,6 @@
 """Unit tests for project similarity."""
 
-from app.services.similarity import model_compatible, weighted_distance
+from app.application.similarity import model_compatible, weighted_distance
 
 
 def _scores(coverage=0.8):
