@@ -388,23 +388,39 @@ def _build_and_store_graph(
         experiments,
     )
     node_map: dict[str, GraphNode] = {}
+    # Natural-key guard: the ux_graph_nodes unique index makes any duplicate
+    # (snapshot, entity_type, entity_id) a hard failure. Truncation to the
+    # column width can collapse distinct logical keys, so dedupe on the exact
+    # persisted values.
+    seen_nodes: set[tuple[str, str]] = set()
     for n in nodes:
+        entity_type = n["entity_type"]
+        entity_id = str(n["entity_id"])[:64]
+        natural = (entity_type, entity_id)
+        if natural in seen_nodes:
+            continue
+        seen_nodes.add(natural)
         node = GraphNode(
             project_id=project_id,
             snapshot_id=snapshot.id,
             node_type=n["node_type"],
-            entity_type=n["entity_type"],
-            entity_id=str(n["entity_id"])[:64],
+            entity_type=entity_type,
+            entity_id=entity_id,
             label=n["label"][:500],
             metadata_json=n["metadata_json"],
         )
         db.add(node)
         node_map[f"{n['entity_type']}:{n['entity_id']}"] = node
     db.flush()
+    seen_edges: set[tuple[str, str, str]] = set()
     for e in edges:
         src = node_map.get(e["source"])
         tgt = node_map.get(e["target"])
         if src and tgt:
+            edge_key = (str(src.id), str(tgt.id), e["edge_type"])
+            if edge_key in seen_edges:
+                continue
+            seen_edges.add(edge_key)
             db.add(GraphEdge(
                 project_id=project_id,
                 source_node_id=src.id,
